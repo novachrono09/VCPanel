@@ -13,7 +13,9 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.util.Base64
@@ -23,6 +25,8 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
@@ -53,18 +57,19 @@ import kotlin.math.abs
 class VoiceOverlayService : Service() {
 
     companion object {
-        // LiveKit Cloud Credentials
         private const val LIVEKIT_WS_URL = "wss://vcpanel-a7dk28u7.livekit.cloud"
         private const val LIVEKIT_API_KEY = "APImAwZ8BNUqRc2"
         private const val LIVEKIT_API_SECRET = "frhN1e6pWcL15tpQtH3Dx0a5Q6oOgJNg0oW9hyrOAP1"
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var windowManager: WindowManager
     private lateinit var audioManager: AudioManager
     private var vibrator: Vibrator? = null
 
     private var overlayView: View? = null
+    private var overlayParams: WindowManager.LayoutParams? = null
     private var room: Room? = null
     private var activeRoomCode = "SQ-884"
 
@@ -218,6 +223,7 @@ class VoiceOverlayService : Service() {
             x = 20
             y = 160
         }
+        overlayParams = params
 
         layoutCollapsed = root.findViewById(R.id.layout_hud_collapsed)
         layoutExpanded = root.findViewById(R.id.layout_hud_expanded)
@@ -243,36 +249,29 @@ class VoiceOverlayService : Service() {
         deckBtnCopyInvite = root.findViewById(R.id.deck_btn_copy_invite)
         deckPingReadout = root.findViewById(R.id.deck_ping_readout)
 
-        // Drag listener on collapsed pill and expanded header
+        // Fluid expand on single-tap of collapsed pill
         val dragTouchListener = createDragTouchListener(params) {
-            // Expand to tactical deck on tap of collapsed pill
             if (layoutCollapsed.visibility == View.VISIBLE) {
-                layoutCollapsed.visibility = View.GONE
-                layoutExpanded.visibility = View.VISIBLE
-                rebuildSquadList()
-                windowManager.updateViewLayout(root, params)
-                vibrateTick()
+                expandDeckAnimated(root, params)
             }
         }
 
         layoutCollapsed.setOnTouchListener(dragTouchListener)
         deckHeaderDragZone.setOnTouchListener(createDragTouchListener(params, onTap = null))
 
-        deckBtnCollapse.setOnClickListener {
-            layoutExpanded.visibility = View.GONE
-            layoutCollapsed.visibility = View.VISIBLE
-            windowManager.updateViewLayout(root, params)
-            vibrateTick()
+        // Fluid collapse animation
+        attachSpringTouch(deckBtnCollapse) {
+            collapseDeckAnimated(root, params)
         }
 
-        pillBtnQuickMute.setOnClickListener { toggleMic() }
-        btnToggleMic.setOnClickListener { toggleMic() }
-        btnToggleDeafen.setOnClickListener { toggleDeafen() }
-        btnToggleRoute.setOnClickListener { toggleAudioRoute() }
-        btnDisconnect.setOnClickListener { shutdownService() }
+        attachSpringTouch(pillBtnQuickMute) { toggleMic() }
+        attachSpringTouch(btnToggleMic) { toggleMic() }
+        attachSpringTouch(btnToggleDeafen) { toggleDeafen() }
+        attachSpringTouch(btnToggleRoute) { toggleAudioRoute() }
+        attachSpringTouch(btnDisconnect) { shutdownService() }
 
-        // 1-Tap Copy Squad Link
-        deckBtnCopyInvite.setOnClickListener {
+        // 1-Tap Copy Squad Link with tactile morph
+        attachSpringTouch(deckBtnCopyInvite) {
             copySquadInviteToClipboard()
         }
 
@@ -281,12 +280,91 @@ class VoiceOverlayService : Service() {
         updateDeafenUi()
     }
 
+    private fun expandDeckAnimated(root: View, params: WindowManager.LayoutParams) {
+        layoutCollapsed.animate()
+            .scaleX(0.85f).scaleY(0.85f).alpha(0f)
+            .setDuration(90)
+            .withEndAction {
+                layoutCollapsed.visibility = View.GONE
+                layoutExpanded.visibility = View.VISIBLE
+                rebuildSquadList()
+                windowManager.updateViewLayout(root, params)
+
+                layoutExpanded.scaleX = 0.88f
+                layoutExpanded.scaleY = 0.88f
+                layoutExpanded.alpha = 0f
+                layoutExpanded.animate()
+                    .scaleX(1.0f).scaleY(1.0f).alpha(1.0f)
+                    .setDuration(160)
+                    .setInterpolator(OvershootInterpolator(1.3f))
+                    .start()
+            }.start()
+        vibrateClick()
+    }
+
+    private fun collapseDeckAnimated(root: View, params: WindowManager.LayoutParams) {
+        layoutExpanded.animate()
+            .scaleX(0.88f).scaleY(0.88f).alpha(0f)
+            .setDuration(100)
+            .withEndAction {
+                layoutExpanded.visibility = View.GONE
+                layoutCollapsed.visibility = View.VISIBLE
+                windowManager.updateViewLayout(root, params)
+
+                layoutCollapsed.scaleX = 0.85f
+                layoutCollapsed.scaleY = 0.85f
+                layoutCollapsed.alpha = 0f
+                layoutCollapsed.animate()
+                    .scaleX(1.0f).scaleY(1.0f).alpha(1.0f)
+                    .setDuration(140)
+                    .setInterpolator(OvershootInterpolator(1.6f))
+                    .start()
+            }.start()
+        vibrateClick()
+    }
+
+    private fun attachSpringTouch(view: View, onClick: () -> Unit) {
+        view.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(80).start()
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.animate().scaleX(1.0f).scaleY(1.0f)
+                        .setDuration(140)
+                        .setInterpolator(OvershootInterpolator(2.2f))
+                        .start()
+                    onClick()
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                }
+            }
+            true
+        }
+    }
+
     private fun copySquadInviteToClipboard() {
         val link = "vcpanel://join?room=$activeRoomCode"
         val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         clipboard.setPrimaryClip(ClipData.newPlainText("SquadComms Channel", link))
-        Toast.makeText(this, "Copied invite link: $link", Toast.LENGTH_SHORT).show()
-        vibrateTick()
+
+        // Morphing success micro-interaction
+        deckBtnCopyInvite.text = "[✓] LINK COPIED!"
+        deckBtnCopyInvite.setTextColor(Color.parseColor("#00F58A"))
+        deckBtnCopyInvite.animate()
+            .scaleX(1.05f).scaleY(1.05f)
+            .setDuration(100)
+            .withEndAction {
+                deckBtnCopyInvite.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
+            }.start()
+
+        mainHandler.postDelayed({
+            deckBtnCopyInvite.text = "[+] COPY // #$activeRoomCode"
+            deckBtnCopyInvite.setTextColor(Color.parseColor("#F0F4F8"))
+        }, 1500)
+
+        vibrateClick()
     }
 
     private fun toggleMic() {
@@ -300,7 +378,7 @@ class VoiceOverlayService : Service() {
             room?.localParticipant?.setMicrophoneEnabled(isMicEnabled)
         }
         updateMicUi()
-        vibrateTick()
+        vibrateClick()
     }
 
     private fun toggleDeafen() {
@@ -312,7 +390,7 @@ class VoiceOverlayService : Service() {
         applyRemoteVolumes()
         updateMicUi()
         updateDeafenUi()
-        vibrateTick()
+        vibrateClick()
     }
 
     private fun toggleAudioRoute() {
@@ -321,25 +399,37 @@ class VoiceOverlayService : Service() {
         txtStateRoute.text = if (isSpeakerphone) "SPKR" else "EAR"
         txtStateRoute.setTextColor(Color.parseColor(if (isSpeakerphone) "#00F58A" else "#7C869B"))
         btnToggleRoute.isActivated = isSpeakerphone
-        vibrateTick()
+
+        txtStateRoute.animate().scaleX(1.18f).scaleY(1.18f).setDuration(80).withEndAction {
+            txtStateRoute.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+        }.start()
+
+        vibrateClick()
     }
 
     private fun updateMicUi() {
-        // Quick Mute button in collapsed pill
         pillBtnQuickMute.isSelected = !isMicEnabled
         pillBtnQuickMute.text = if (isMicEnabled) "MIC" else "MUTED"
 
-        // Grid Toggle button
         btnToggleMic.isSelected = !isMicEnabled
         btnToggleMic.isActivated = isMicEnabled
         txtStateMic.text = if (isMicEnabled) "LIVE" else "MUTED"
         txtStateMic.setTextColor(Color.parseColor(if (isMicEnabled) "#00F58A" else "#FF2A4B"))
+
+        // Pop pulse on state text
+        txtStateMic.animate().scaleX(1.18f).scaleY(1.18f).setDuration(80).withEndAction {
+            txtStateMic.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+        }.start()
     }
 
     private fun updateDeafenUi() {
         btnToggleDeafen.isSelected = isDeafened
         txtStateDeafen.text = if (isDeafened) "DEAF" else "NORM"
         txtStateDeafen.setTextColor(Color.parseColor(if (isDeafened) "#FF2A4B" else "#7C869B"))
+
+        txtStateDeafen.animate().scaleX(1.18f).scaleY(1.18f).setDuration(80).withEndAction {
+            txtStateDeafen.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+        }.start()
     }
 
     private fun rebuildSquadList() {
@@ -368,7 +458,7 @@ class VoiceOverlayService : Service() {
         remotes.forEach { participant ->
             val identity = participant.identity?.value ?: "OPERATOR"
             val savedVol = participantVolumes.getOrPut(identity) {
-                prefs.getInt("vol_$identity", 100) // Persistent volume memory
+                prefs.getInt("vol_$identity", 100)
             }
 
             val row = LinearLayout(this).apply {
@@ -417,6 +507,8 @@ class VoiceOverlayService : Service() {
             topBar.addView(callsignTxt)
             topBar.addView(gainReadout)
 
+            var lastSnapped = false
+
             val seekbar = SeekBar(this).apply {
                 max = 200
                 progress = savedVol
@@ -432,10 +524,16 @@ class VoiceOverlayService : Service() {
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                         var effectiveProgress = progress
-                        // Magnetic 100% Unity Snap
+                        // Magnetic 100% Unity Snap + Detent Haptic Click
                         if (fromUser && progress in 96..104) {
                             effectiveProgress = 100
                             sb?.progress = 100
+                            if (!lastSnapped) {
+                                vibrateDetent()
+                                lastSnapped = true
+                            }
+                        } else {
+                            lastSnapped = false
                         }
 
                         participantVolumes[identity] = effectiveProgress
@@ -443,8 +541,14 @@ class VoiceOverlayService : Service() {
                         updateGainText(gainReadout, effectiveProgress)
                         setParticipantVolume(participant, effectiveProgress)
                     }
-                    override fun onStartTrackingTouch(sb: SeekBar?) {}
-                    override fun onStopTrackingTouch(sb: SeekBar?) {}
+
+                    override fun onStartTrackingTouch(sb: SeekBar?) {
+                        sb?.animate()?.scaleY(1.25f)?.setDuration(100)?.start()
+                    }
+
+                    override fun onStopTrackingTouch(sb: SeekBar?) {
+                        sb?.animate()?.scaleY(1.0f)?.setDuration(120)?.start()
+                    }
                 })
             }
 
@@ -459,13 +563,13 @@ class VoiceOverlayService : Service() {
     private fun updateGainText(textView: TextView, progress: Int) {
         if (progress > 100) {
             textView.text = "$progress% BOOST"
-            textView.setTextColor(Color.parseColor("#FFB300")) // Avionics Amber Overdrive
+            textView.setTextColor(Color.parseColor("#FFB300"))
         } else if (progress == 100) {
             textView.text = "100%"
-            textView.setTextColor(Color.parseColor("#00F58A")) // Telemetry Emerald
+            textView.setTextColor(Color.parseColor("#00F58A"))
         } else {
             textView.text = "$progress%"
-            textView.setTextColor(Color.parseColor("#7C869B")) // Etched Titanium
+            textView.setTextColor(Color.parseColor("#7C869B"))
         }
     }
 
@@ -496,6 +600,13 @@ class VoiceOverlayService : Service() {
         if (isAnyoneTalking) {
             val firstSpeaker = activeIds.first()
             pillTelemetryReadout.text = firstSpeaker.uppercase()
+            // Breathing LED pulse on voice transmission
+            pillVoiceLed.animate()
+                .scaleX(1.35f).scaleY(1.35f)
+                .setDuration(100)
+                .withEndAction {
+                    pillVoiceLed.animate().scaleX(1.0f).scaleY(1.0f).setDuration(140).start()
+                }.start()
         } else {
             pillTelemetryReadout.text = "STANDBY"
         }
@@ -514,13 +625,24 @@ class VoiceOverlayService : Service() {
         }
     }
 
-    private fun vibrateTick() {
+    private fun vibrateClick() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 vibrator?.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
             } else {
                 @Suppress("DEPRECATION")
                 vibrator?.vibrate(15)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun vibrateDetent() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                vibrator?.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_TICK))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(25)
             }
         } catch (_: Exception) {}
     }
@@ -535,7 +657,7 @@ class VoiceOverlayService : Service() {
         var initialTouchY = 0f
         var isDragging = false
 
-        return View.OnTouchListener { _, event ->
+        return View.OnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     initialX = params.x
@@ -543,6 +665,7 @@ class VoiceOverlayService : Service() {
                     initialTouchX = event.rawX
                     initialTouchY = event.rawY
                     isDragging = false
+                    v.animate().scaleX(0.96f).scaleY(0.96f).setDuration(70).start()
                     true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -557,9 +680,14 @@ class VoiceOverlayService : Service() {
                     true
                 }
                 MotionEvent.ACTION_UP -> {
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).setInterpolator(OvershootInterpolator(2.0f)).start()
                     if (!isDragging) {
                         onTap?.invoke()
                     }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(90).start()
                     true
                 }
                 else -> false

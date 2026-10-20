@@ -10,8 +10,13 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.Settings
+import android.view.MotionEvent
 import android.view.View
+import android.view.animation.DecelerateInterpolator
+import android.view.animation.OvershootInterpolator
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
@@ -22,12 +27,15 @@ class MainActivity : Activity() {
     private lateinit var inputChannelCode: EditText
     private lateinit var btnRandomizeCode: TextView
     private lateinit var btnDeploy: View
+    private var vibrator: Vibrator? = null
 
     private val recentChips = mutableListOf<TextView>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
 
         inputCallsign = findViewById(R.id.input_callsign)
         inputChannelCode = findViewById(R.id.input_channel_code)
@@ -46,15 +54,16 @@ class MainActivity : Activity() {
         inputCallsign.setText(savedName)
         inputChannelCode.setText(savedRoom)
 
-        // Setup 1-tap channel chips
+        // Setup 1-tap channel chips with spring feedback
         val defaultChannels = listOf("SQ-884", "SCRIM-A", "APEX-01", "DUO-99")
         for (i in recentChips.indices) {
             val code = prefs.getString("chip_$i", defaultChannels[i]) ?: defaultChannels[i]
             val chip = recentChips[i]
             chip.text = "#$code"
-            chip.setOnClickListener {
+            attachTactileSpring(chip) {
                 inputChannelCode.setText(code)
                 updateChipSelection(chip)
+                vibrateClick()
             }
             if (code.equals(savedRoom, ignoreCase = true)) {
                 chip.isSelected = true
@@ -62,8 +71,15 @@ class MainActivity : Activity() {
             }
         }
 
-        // Randomize Tactical Channel Code button
-        btnRandomizeCode.setOnClickListener {
+        // Randomize Tactical Channel Code button with rotational spring animation
+        attachTactileSpring(btnRandomizeCode) {
+            vibrateClick()
+            btnRandomizeCode.animate()
+                .rotationBy(360f)
+                .setDuration(240)
+                .setInterpolator(DecelerateInterpolator())
+                .start()
+
             val prefixes = listOf("SQ", "VEX", "APEX", "GHOST", "VIPER", "TITAN")
             val randCode = "${prefixes.random()}-${(100..999).random()}"
             inputChannelCode.setText(randCode)
@@ -80,7 +96,47 @@ class MainActivity : Activity() {
         // Smart Clipboard Detection
         checkClipboardForRoomCode()
 
-        btnDeploy.setOnClickListener { checkPermissionsAndDeploy() }
+        // Deploy button with tactile bounce
+        attachTactileSpring(btnDeploy) {
+            vibrateClick()
+            checkPermissionsAndDeploy()
+        }
+
+        // Lightweight entrance cascade (0 object allocations)
+        runStaggeredEntranceAnimation()
+    }
+
+    private fun runStaggeredEntranceAnimation() {
+        val root = findViewById<View>(android.R.id.content)
+        root.alpha = 0f
+        root.translationY = 18f
+        root.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(220)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+    }
+
+    private fun attachTactileSpring(view: View, onClick: () -> Unit) {
+        view.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    v.animate().scaleX(0.93f).scaleY(0.93f).setDuration(80).start()
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.animate().scaleX(1.0f).scaleY(1.0f)
+                        .setDuration(140)
+                        .setInterpolator(OvershootInterpolator(2.5f))
+                        .start()
+                    onClick()
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                }
+            }
+            true
+        }
     }
 
     private fun updateChipSelection(selectedChip: TextView) {
@@ -88,6 +144,11 @@ class MainActivity : Activity() {
             val isCurrent = (chip == selectedChip)
             chip.isSelected = isCurrent
             chip.setTextColor(Color.parseColor(if (isCurrent) "#FF5500" else "#F0F4F8"))
+            if (isCurrent) {
+                chip.animate().scaleX(1.08f).scaleY(1.08f).setDuration(90).withEndAction {
+                    chip.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+                }.start()
+            }
         }
     }
 
@@ -108,8 +169,18 @@ class MainActivity : Activity() {
         } catch (_: Exception) {}
     }
 
+    private fun vibrateClick() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                vibrator?.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(15)
+            }
+        } catch (_: Exception) {}
+    }
+
     private fun checkPermissionsAndDeploy() {
-        // 1. Overlay permission check
         if (!Settings.canDrawOverlays(this)) {
             Toast.makeText(this, "Enable 'Display over other apps' to float HUD", Toast.LENGTH_LONG).show()
             val intent = Intent(
@@ -120,7 +191,6 @@ class MainActivity : Activity() {
             return
         }
 
-        // 2. Microphone & Notifications permission check
         val neededPerms = mutableListOf(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             neededPerms.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -155,7 +225,7 @@ class MainActivity : Activity() {
         prefs.edit()
             .putString("callsign", callsign)
             .putString("room", roomCode)
-            .putString("chip_0", roomCode) // Save as first recent chip
+            .putString("chip_0", roomCode)
             .apply()
 
         val serviceIntent = Intent(this, VoiceOverlayService::class.java).apply {
@@ -169,7 +239,6 @@ class MainActivity : Activity() {
             startService(serviceIntent)
         }
 
-        // Destroy launcher activity immediately to save memory
         finish()
     }
 }
