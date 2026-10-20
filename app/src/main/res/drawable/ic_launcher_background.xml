@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Deep Carbon Obsidian Base Chassis -->
+    <path
+        android:fillColor="#090A0D"
+        android:pathData="M0,0h108v108h-108z" />
+
+    <!-- Subtle Tactical Concentric Avionics Rings -->
+    <path
+        android:strokeColor="#181D29"
+        android:strokeWidth="1.2"
+        android:pathData="M54,20 A34,34 0 1,0 54,88 A34,34 0 1,0 54,20" />
+
+    <path
+        android:strokeColor="#10141D"
+        android:strokeWidth="1.0"
+        android:pathData="M54,12 A42,42 0 1,0 54,96 A42,42 0 1,0 54,12" />
+
+    <!-- Precision Radar / Reticle Coordinates -->
+    <path
+        android:strokeColor="#242C3D"
+        android:strokeWidth="1.2"
+        android:pathData="M54,14 L54,22 M54,86 L54,94 M14,54 L22,54 M86,54 L94,54" />
+
+    <!-- Diamond Compass Point Center Reference -->
+    <path
+        android:fillColor="#151A26"
+        android:pathData="M54,28 L56,30 L54,32 L52,30 Z M54,76 L56,78 L54,80 L52,78 Z" />
+</vector>

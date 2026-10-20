@@ -371,17 +371,25 @@ class VoiceOverlayService : Service() {
         view.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(80).start()
+                    v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(70).start()
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val isInside = event.x in 0f..v.width.toFloat() && event.y in 0f..v.height.toFloat()
+                    val targetScale = if (isInside) 0.92f else 1.0f
+                    v.animate().scaleX(targetScale).scaleY(targetScale).setDuration(60).start()
                 }
                 MotionEvent.ACTION_UP -> {
                     v.animate().scaleX(1.0f).scaleY(1.0f)
-                        .setDuration(140)
+                        .setDuration(120)
                         .setInterpolator(OvershootInterpolator(2.2f))
                         .start()
-                    onClick()
+                    val isInside = event.x in 0f..v.width.toFloat() && event.y in 0f..v.height.toFloat()
+                    if (isInside) {
+                        onClick()
+                    }
                 }
                 MotionEvent.ACTION_CANCEL -> {
-                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
                 }
             }
             true
@@ -439,6 +447,17 @@ class VoiceOverlayService : Service() {
                         }
                         true
                     }
+                    MotionEvent.ACTION_MOVE -> {
+                        val isInside = event.x in 0f..v.width.toFloat() && event.y in 0f..v.height.toFloat()
+                        if (!isInside && isMicEnabled) {
+                            v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(60).start()
+                            setPttSpeaking(false)
+                        } else if (isInside && !isMicEnabled && !isDeafened) {
+                            v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(60).start()
+                            setPttSpeaking(true)
+                        }
+                        true
+                    }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                         v.animate().scaleX(1.0f).scaleY(1.0f)
                             .setDuration(120)
@@ -455,12 +474,21 @@ class VoiceOverlayService : Service() {
                         v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(80).start()
                         true
                     }
+                    MotionEvent.ACTION_MOVE -> {
+                        val isInside = event.x in 0f..v.width.toFloat() && event.y in 0f..v.height.toFloat()
+                        val targetScale = if (isInside) 0.92f else 1.0f
+                        v.animate().scaleX(targetScale).scaleY(targetScale).setDuration(60).start()
+                        true
+                    }
                     MotionEvent.ACTION_UP -> {
                         v.animate().scaleX(1.0f).scaleY(1.0f)
                             .setDuration(140)
                             .setInterpolator(OvershootInterpolator(2.2f))
                             .start()
-                        toggleMic()
+                        val isInside = event.x in 0f..v.width.toFloat() && event.y in 0f..v.height.toFloat()
+                        if (isInside) {
+                            toggleMic()
+                        }
                         true
                     }
                     MotionEvent.ACTION_CANCEL -> {
@@ -909,7 +937,7 @@ class VoiceOverlayService : Service() {
                     dp(20)
                 ).apply { rightMargin = dp(8) }
 
-                setOnClickListener {
+                attachSpringTouch(this) {
                     sendSquadPing(identity, this)
                 }
             }
@@ -1127,7 +1155,8 @@ class VoiceOverlayService : Service() {
                         .setDuration(120)
                         .setInterpolator(OvershootInterpolator(2.0f))
                         .start()
-                    if (!isDragging) {
+                    val isInside = event.x in 0f..v.width.toFloat() && event.y in 0f..v.height.toFloat()
+                    if (!isDragging && isInside) {
                         onClick?.invoke()
                     }
                     true
@@ -1199,8 +1228,8 @@ class VoiceOverlayService : Service() {
         }
 
         val notification = Notification.Builder(this, channelId)
-            .setContentTitle("SquadComms Active")
-            .setContentText("Tactical HUD running")
+            .setContentTitle("VOX Tactical HUD")
+            .setContentText("In-Game Comms Active")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .build()

@@ -58,9 +58,9 @@
         android:fontFamily="sans-serif-black"
         android:includeFontPadding="false"
         android:letterSpacing="0.04"
-        android:text="SQUAD//COMMS"
+        android:text="VOX"
         android:textColor="#F0F4F8"
-        android:textSize="28sp"
+        android:textSize="32sp"
         android:textStyle="bold" />
 
     <TextView
@@ -68,7 +68,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="4dp"
         android:fontFamily="monospace"
-        android:text="ULTRA-LOW-LATENCY TACTICAL OVERLAY TRANSCEIVER"
+        android:text="TACTICAL VOICE OVERLAY // ZERO-SERVER ENGINE"
         android:textColor="#7C869B"
         android:textSize="11sp" />
 

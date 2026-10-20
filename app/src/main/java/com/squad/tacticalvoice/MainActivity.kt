@@ -124,12 +124,20 @@ class MainActivity : Activity() {
                 MotionEvent.ACTION_DOWN -> {
                     v.animate().scaleX(0.93f).scaleY(0.93f).setDuration(80).start()
                 }
+                MotionEvent.ACTION_MOVE -> {
+                    val isInside = event.x in 0f..v.width.toFloat() && event.y in 0f..v.height.toFloat()
+                    val targetScale = if (isInside) 0.93f else 1.0f
+                    v.animate().scaleX(targetScale).scaleY(targetScale).setDuration(60).start()
+                }
                 MotionEvent.ACTION_UP -> {
                     v.animate().scaleX(1.0f).scaleY(1.0f)
                         .setDuration(140)
                         .setInterpolator(OvershootInterpolator(2.5f))
                         .start()
-                    onClick()
+                    val isInside = event.x in 0f..v.width.toFloat() && event.y in 0f..v.height.toFloat()
+                    if (isInside) {
+                        onClick()
+                    }
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()

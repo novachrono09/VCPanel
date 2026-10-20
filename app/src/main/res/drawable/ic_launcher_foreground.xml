@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Outermost Audio Frequency Wing Elements (Tactical Steel) -->
+    <path
+        android:fillColor="#46526B"
+        android:pathData="M20,49 C20,48.4 20.4,48 21,48 C21.6,48 22,48.4 22,49 L22,53 C22,53.6 21.6,54 21,54 C20.4,54 20,53.6 20,53 Z M86,49 C86,48.4 86.4,48 87,48 C87.6,48 88,48.4 88,49 L88,53 C88,53.6 87.6,54 87,54 C86.4,54 86,53.6 86,53 Z" />
+
+    <!-- Secondary Waveform Telemetry Bars (Ice Cyan) -->
+    <path
+        android:fillColor="#3DEFE9"
+        android:pathData="M26,45.5 C26,44.7 26.7,44 27.5,44 C28.3,44 29,44.7 29,45.5 L29,56.5 C29,57.3 28.3,58 27.5,58 C26.7,58 26,57.3 26,56.5 Z M79,45.5 C79,44.7 79.7,44 80.5,44 C81.3,44 82,44.7 82,45.5 L82,56.5 C82,57.3 81.3,58 80.5,58 C79.7,58 79,57.3 79,56.5 Z" />
+
+    <!-- Primary Tactical VOX Chevron 'V' (Neon Emerald) -->
+    <path
+        android:fillColor="#00F58A"
+        android:pathData="M34,36 L42.5,36 L54,61 L65.5,36 L74,36 L56.8,73.5 C55.6,76.2 52.4,76.2 51.2,73.5 Z" />
+
+    <!-- High-Glow Core Pulse Diamond (Pure Avionics White) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,41 L58.5,46 L54,51 L49.5,46 Z" />
+</vector>
