@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Teammate Speaking State -->
+    <item android:state_activated="true">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#11141B" />
+                    <corners android:radius="4dp" />
+                    <stroke
+                        android:width="1dp"
+                        android:color="#00F58A" />
+                </shape>
+            </item>
+            <!-- Left Voice Telemetry Rail -->
+            <item android:gravity="left|fill_vertical">
+                <shape android:shape="rectangle">
+                    <size android:width="3dp" />
+                    <solid android:color="#00F58A" />
+                    <corners
+                        android:bottomLeftRadius="4dp"
+                        android:topLeftRadius="4dp" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+
+    <!-- Silent / Standby State -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#11141B" />
+            <corners android:radius="4dp" />
+            <stroke
+                android:width="1dp"
+                android:color="#262C3A" />
+        </shape>
+    </item>
+</selector>

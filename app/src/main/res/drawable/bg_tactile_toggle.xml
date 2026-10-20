@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Pressed State -->
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#232938" />
+            <corners android:radius="4dp" />
+            <stroke
+                android:width="1dp"
+                android:color="#7C869B" />
+        </shape>
+    </item>
+
+    <!-- Selected State: Used for Muted / Deafened Killswitch State -->
+    <item android:state_selected="true">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#280D14" />
+                    <corners android:radius="4dp" />
+                    <stroke
+                        android:width="1dp"
+                        android:color="#FF2A4B" />
+                </shape>
+            </item>
+            <item
+                android:gravity="top|center_horizontal"
+                android:top="1dp">
+                <shape android:shape="rectangle">
+                    <size
+                        android:width="20dp"
+                        android:height="2dp" />
+                    <solid android:color="#FF2A4B" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+
+    <!-- Activated State: Used for Active Mic / Speaker Boost State -->
+    <item android:state_activated="true">
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#0B241B" />
+                    <corners android:radius="4dp" />
+                    <stroke
+                        android:width="1dp"
+                        android:color="#00F58A" />
+                </shape>
+            </item>
+            <item
+                android:gravity="top|center_horizontal"
+                android:top="1dp">
+                <shape android:shape="rectangle">
+                    <size
+                        android:width="20dp"
+                        android:height="2dp" />
+                    <solid android:color="#00F58A" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+
+    <!-- Default Normal State -->
+    <item>
+        <layer-list>
+            <item>
+                <shape android:shape="rectangle">
+                    <solid android:color="#181C26" />
+                    <corners android:radius="4dp" />
+                    <stroke
+                        android:width="1dp"
+                        android:color="#262C3A" />
+                </shape>
+            </item>
+            <item
+                android:gravity="top|center_horizontal"
+                android:top="1dp">
+                <shape android:shape="rectangle">
+                    <size
+                        android:width="20dp"
+                        android:height="2dp" />
+                    <solid android:color="#464E62" />
+                </shape>
+            </item>
+        </layer-list>
+    </item>
+</selector>

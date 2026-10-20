@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Muted State -->
+    <item android:state_selected="true">
+        <shape android:shape="oval">
+            <size
+                android:width="8dp"
+                android:height="8dp" />
+            <solid android:color="#FF2A4B" />
+        </shape>
+    </item>
+    <!-- Speaking / Transmitting State -->
+    <item android:state_activated="true">
+        <shape android:shape="oval">
+            <size
+                android:width="8dp"
+                android:height="8dp" />
+            <solid android:color="#00F58A" />
+        </shape>
+    </item>
+    <!-- Idle / Standby Connected State -->
+    <item>
+        <shape android:shape="oval">
+            <size
+                android:width="8dp"
+                android:height="8dp" />
+            <solid android:color="#464E62" />
+        </shape>
+    </item>
+</selector>

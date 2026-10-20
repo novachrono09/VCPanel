@@ -2,6 +2,7 @@ package com.squad.tacticalvoice
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -10,94 +11,107 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.text.InputType
-import android.util.TypedValue
-import android.view.Gravity
-import android.widget.Button
+import android.view.View
 import android.widget.EditText
-import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 
 class MainActivity : Activity() {
 
     private lateinit var inputCallsign: EditText
-    private lateinit var inputRoomCode: EditText
+    private lateinit var inputChannelCode: EditText
+    private lateinit var btnRandomizeCode: TextView
+    private lateinit var btnDeploy: View
+
+    private val recentChips = mutableListOf<TextView>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        inputCallsign = findViewById(R.id.input_callsign)
+        inputChannelCode = findViewById(R.id.input_channel_code)
+        btnRandomizeCode = findViewById(R.id.btn_randomize_code)
+        btnDeploy = findViewById(R.id.btn_deploy_hud)
+
+        recentChips.add(findViewById(R.id.chip_channel_1))
+        recentChips.add(findViewById(R.id.chip_channel_2))
+        recentChips.add(findViewById(R.id.chip_channel_3))
+        recentChips.add(findViewById(R.id.chip_channel_4))
 
         val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
-        val savedName = prefs.getString("callsign", "Nova") ?: "Nova"
-        val savedRoom = prefs.getString("room", "squad-1") ?: "squad-1"
+        val savedName = prefs.getString("callsign", "NOVA") ?: "NOVA"
+        val savedRoom = prefs.getString("room", "SQ-884") ?: "SQ-884"
 
-        // Programmatic layout = zero XML inflation overhead for the launcher
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setBackgroundColor(Color.parseColor("#0B0D11"))
-            setPadding(64, 64, 64, 64)
+        inputCallsign.setText(savedName)
+        inputChannelCode.setText(savedRoom)
+
+        // Setup 1-tap channel chips
+        val defaultChannels = listOf("SQ-884", "SCRIM-A", "APEX-01", "DUO-99")
+        for (i in recentChips.indices) {
+            val code = prefs.getString("chip_$i", defaultChannels[i]) ?: defaultChannels[i]
+            val chip = recentChips[i]
+            chip.text = "#$code"
+            chip.setOnClickListener {
+                inputChannelCode.setText(code)
+                updateChipSelection(chip)
+            }
+            if (code.equals(savedRoom, ignoreCase = true)) {
+                chip.isSelected = true
+                chip.setTextColor(Color.parseColor("#FF5500"))
+            }
         }
 
-        val title = TextView(this).apply {
-            text = "SQUAD // TACTICAL COMMS"
-            setTextColor(Color.parseColor("#00F59B"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
-            typeface = android.graphics.Typeface.MONOSPACE
-            setPadding(0, 0, 0, 48)
+        // Randomize Tactical Channel Code button
+        btnRandomizeCode.setOnClickListener {
+            val prefixes = listOf("SQ", "VEX", "APEX", "GHOST", "VIPER", "TITAN")
+            val randCode = "${prefixes.random()}-${(100..999).random()}"
+            inputChannelCode.setText(randCode)
         }
 
-        inputCallsign = EditText(this).apply {
-            hint = "CALLSIGN (YOUR NAME)"
-            setText(savedName)
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.parseColor("#64748B"))
-            setBackgroundResource(R.drawable.bg_tactical_pill)
-            setPadding(36, 28, 36, 28)
-            inputType = InputType.TYPE_CLASS_TEXT
-            typeface = android.graphics.Typeface.MONOSPACE
+        // Check for deep link (vcpanel://join?room=XXXX)
+        intent?.data?.let { uri ->
+            uri.getQueryParameter("room")?.let { deepRoom ->
+                inputChannelCode.setText(deepRoom.uppercase())
+                Toast.makeText(this, "Joined frequency: $deepRoom", Toast.LENGTH_SHORT).show()
+            }
         }
 
-        val spacer = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply { topMargin = 24 }
+        // Smart Clipboard Detection
+        checkClipboardForRoomCode()
 
-        inputRoomCode = EditText(this).apply {
-            hint = "CHANNEL CODE"
-            setText(savedRoom)
-            setTextColor(Color.WHITE)
-            setHintTextColor(Color.parseColor("#64748B"))
-            setBackgroundResource(R.drawable.bg_tactical_pill)
-            setPadding(36, 28, 36, 28)
-            inputType = InputType.TYPE_CLASS_TEXT
-            typeface = android.graphics.Typeface.MONOSPACE
-            layoutParams = spacer
+        btnDeploy.setOnClickListener { checkPermissionsAndDeploy() }
+    }
+
+    private fun updateChipSelection(selectedChip: TextView) {
+        for (chip in recentChips) {
+            val isCurrent = (chip == selectedChip)
+            chip.isSelected = isCurrent
+            chip.setTextColor(Color.parseColor(if (isCurrent) "#FF5500" else "#F0F4F8"))
         }
+    }
 
-        val btnLaunch = Button(this).apply {
-            text = "DEPLOY FLOATING HUD"
-            setTextColor(Color.parseColor("#0B0D11"))
-            setBackgroundColor(Color.parseColor("#00F59B"))
-            typeface = android.graphics.Typeface.MONOSPACE
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply { topMargin = 48 }
-            setOnClickListener { checkPermissionsAndDeploy() }
-        }
-
-        root.addView(title)
-        root.addView(inputCallsign)
-        root.addView(inputRoomCode)
-        root.addView(btnLaunch)
-        setContentView(root)
+    private fun checkClipboardForRoomCode() {
+        try {
+            val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clip = clipboard.primaryClip
+            if (clip != null && clip.itemCount > 0) {
+                val text = clip.getItemAt(0).text?.toString()?.trim() ?: ""
+                if (text.startsWith("vcpanel://join?room=")) {
+                    val code = Uri.parse(text).getQueryParameter("room")
+                    if (!code.isNullOrEmpty()) {
+                        inputChannelCode.setText(code.uppercase())
+                        Toast.makeText(this, "Detected room $code from clipboard", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     private fun checkPermissionsAndDeploy() {
-        // 1. Check Display Over Other Apps permission
+        // 1. Overlay permission check
         if (!Settings.canDrawOverlays(this)) {
-            Toast.makeText(this, "Enable 'Display over other apps' first", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Enable 'Display over other apps' to float HUD", Toast.LENGTH_LONG).show()
             val intent = Intent(
                 Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                 Uri.parse("package:$packageName")
@@ -106,7 +120,7 @@ class MainActivity : Activity() {
             return
         }
 
-        // 2. Check Microphone & Notification permissions
+        // 2. Microphone & Notifications permission check
         val neededPerms = mutableListOf(Manifest.permission.RECORD_AUDIO)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             neededPerms.add(Manifest.permission.POST_NOTIFICATIONS)
@@ -134,12 +148,14 @@ class MainActivity : Activity() {
     }
 
     private fun deployHudAndSelfDestruct() {
-        val callsign = inputCallsign.text.toString().trim().ifEmpty { "Operator" }
-        val roomCode = inputRoomCode.text.toString().trim().ifEmpty { "squad-1" }
+        val callsign = inputCallsign.text.toString().trim().ifEmpty { "OPERATOR" }.uppercase()
+        val roomCode = inputChannelCode.text.toString().trim().ifEmpty { "SQ-884" }.uppercase()
 
-        getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE).edit()
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
             .putString("callsign", callsign)
             .putString("room", roomCode)
+            .putString("chip_0", roomCode) // Save as first recent chip
             .apply()
 
         val serviceIntent = Intent(this, VoiceOverlayService::class.java).apply {
@@ -153,7 +169,7 @@ class MainActivity : Activity() {
             startService(serviceIntent)
         }
 
-        // Destroy the Activity immediately so only the ultra-light overlay stays in RAM
+        // Destroy launcher activity immediately to save memory
         finish()
     }
 }

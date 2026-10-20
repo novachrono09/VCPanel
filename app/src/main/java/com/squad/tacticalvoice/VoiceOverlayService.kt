@@ -5,14 +5,17 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.os.Build
 import android.os.IBinder
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.util.Base64
 import android.util.TypedValue
 import android.view.Gravity
@@ -23,6 +26,7 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
+import android.widget.Toast
 import io.livekit.android.AudioOptions
 import io.livekit.android.LiveKit
 import io.livekit.android.LiveKitOverrides
@@ -31,9 +35,9 @@ import io.livekit.android.audio.AudioProcessorOptions
 import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
+import io.livekit.android.room.participant.AudioTrackPublishDefaults
 import io.livekit.android.room.participant.Participant
 import io.livekit.android.room.participant.RemoteParticipant
-import io.livekit.android.room.participant.AudioTrackPublishDefaults
 import io.livekit.android.room.track.LocalAudioTrackOptions
 import io.livekit.android.room.track.RemoteAudioTrack
 import kotlinx.coroutines.CoroutineScope
@@ -49,9 +53,7 @@ import kotlin.math.abs
 class VoiceOverlayService : Service() {
 
     companion object {
-        // =========================================================================
-        // LIVEKIT CLOUD KEYS CONFIGURED
-        // =========================================================================
+        // LiveKit Cloud Credentials
         private const val LIVEKIT_WS_URL = "wss://vcpanel-a7dk28u7.livekit.cloud"
         private const val LIVEKIT_API_KEY = "APImAwZ8BNUqRc2"
         private const val LIVEKIT_API_SECRET = "frhN1e6pWcL15tpQtH3Dx0a5Q6oOgJNg0oW9hyrOAP1"
@@ -60,27 +62,42 @@ class VoiceOverlayService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private lateinit var windowManager: WindowManager
     private lateinit var audioManager: AudioManager
+    private var vibrator: Vibrator? = null
+
     private var overlayView: View? = null
     private var room: Room? = null
+    private var activeRoomCode = "SQ-884"
 
     // State flags
     private var isMicEnabled = true
     private var isDeafened = false
     private var isSpeakerphone = true
-    private val participantVolumes = mutableMapOf<String, Int>() // Stores 0..200% per user
+    private val participantVolumes = mutableMapOf<String, Int>()
 
     // UI References
     private lateinit var layoutCollapsed: View
     private lateinit var layoutExpanded: View
-    private lateinit var pillStatusDot: View
-    private lateinit var headerStatusDot: View
+    private lateinit var pillVoiceLed: View
     private lateinit var pillSquadCount: TextView
-    private lateinit var pillQuickMuteBtn: TextView
-    private lateinit var txtRoomTitle: TextView
-    private lateinit var btnToggleMic: TextView
-    private lateinit var btnToggleDeafen: TextView
-    private lateinit var btnAudioRoute: TextView
-    private lateinit var squadListContainer: LinearLayout
+    private lateinit var pillTelemetryReadout: TextView
+    private lateinit var pillBtnQuickMute: TextView
+
+    private lateinit var deckHeaderDragZone: View
+    private lateinit var deckChannelTitle: TextView
+    private lateinit var deckBitrateBadge: TextView
+    private lateinit var deckBtnCollapse: TextView
+
+    private lateinit var btnToggleMic: View
+    private lateinit var txtStateMic: TextView
+    private lateinit var btnToggleDeafen: View
+    private lateinit var txtStateDeafen: TextView
+    private lateinit var btnToggleRoute: View
+    private lateinit var txtStateRoute: TextView
+    private lateinit var btnDisconnect: View
+
+    private lateinit var deckRosterContainer: LinearLayout
+    private lateinit var deckBtnCopyInvite: TextView
+    private lateinit var deckPingReadout: TextView
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -88,21 +105,24 @@ class VoiceOverlayService : Service() {
         super.onCreate()
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         startMinimalForegroundNotification()
         spawnTacticalOverlay()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val callsign = intent?.getStringExtra("CALLSIGN") ?: "Player_${(10..99).random()}"
-        val roomName = intent?.getStringExtra("ROOM_CODE") ?: "squad-alpha"
-        connectToVoiceBackend(callsign, roomName)
+        val callsign = intent?.getStringExtra("CALLSIGN") ?: "OPERATOR"
+        val roomCode = intent?.getStringExtra("ROOM_CODE") ?: "SQ-884"
+        activeRoomCode = roomCode
+        deckChannelTitle.text = "CH // $roomCode"
+        deckBtnCopyInvite.text = "[+] COPY // #$roomCode"
+        connectToVoiceBackend(callsign, roomCode)
         return START_STICKY
     }
 
     private fun connectToVoiceBackend(callsign: String, roomName: String) {
         if (room != null) return
 
-        // Configure Opus at 96kbps studio voice quality + hardware AEC/NS
         val roomOptions = RoomOptions(
             adaptiveStream = false,
             dynacast = false,
@@ -113,9 +133,9 @@ class VoiceOverlayService : Service() {
                 highPassFilter = true
             ),
             audioTrackPublishDefaults = AudioTrackPublishDefaults(
-                audioBitrate = 96_000, // 96kbps crystal-clear Opus (Discord defaults to 64k)
-                dtx = true,            // Discontinuous transmission: 0 bandwidth when silent
-                red = true             // Redundant packet encoding against mobile ping spikes
+                audioBitrate = 96_000,
+                dtx = true,
+                red = true
             )
         )
 
@@ -130,23 +150,22 @@ class VoiceOverlayService : Service() {
         )
         room = currentRoom
 
-        // Listen for room & speaking events
         serviceScope.launch {
             currentRoom.events.collect { event ->
                 when (event) {
                     is RoomEvent.Connected -> {
-                        updateStatusColor("#00F59B")
-                        txtRoomTitle.text = "${roomName.uppercase()} // 96K"
+                        deckPingReadout.text = "LIVE"
+                        deckPingReadout.setTextColor(Color.parseColor("#00F58A"))
                         currentRoom.localParticipant.setMicrophoneEnabled(isMicEnabled)
                         rebuildSquadList()
                     }
                     is RoomEvent.Reconnecting -> {
-                        updateStatusColor("#F59E0B")
-                        txtRoomTitle.text = "RECONNECTING..."
+                        deckPingReadout.text = "RECON"
+                        deckPingReadout.setTextColor(Color.parseColor("#FFB300"))
                     }
                     is RoomEvent.Reconnected -> {
-                        updateStatusColor("#00F59B")
-                        txtRoomTitle.text = "${roomName.uppercase()} // 96K"
+                        deckPingReadout.text = "LIVE"
+                        deckPingReadout.setTextColor(Color.parseColor("#00F58A"))
                     }
                     is RoomEvent.ParticipantConnected,
                     is RoomEvent.ParticipantDisconnected,
@@ -162,7 +181,6 @@ class VoiceOverlayService : Service() {
             }
         }
 
-        // Generate JWT locally on-device and connect directly to LiveKit SFU
         serviceScope.launch(Dispatchers.IO) {
             try {
                 val token = generateLiveKitJwt(
@@ -174,8 +192,8 @@ class VoiceOverlayService : Service() {
                 currentRoom.connect(LIVEKIT_WS_URL, token)
             } catch (e: Exception) {
                 launch(Dispatchers.Main) {
-                    updateStatusColor("#FF3B5C")
-                    txtRoomTitle.text = "CONN ERR"
+                    deckPingReadout.text = "ERR"
+                    deckPingReadout.setTextColor(Color.parseColor("#FF2A4B"))
                 }
             }
         }
@@ -192,64 +210,87 @@ class VoiceOverlayService : Service() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.OPAQUE // Hardware optimization: tells SurfaceFlinger no alpha blending needed
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 24
-            y = 180
-            // We switch to TRANSLUCENT only so the 10dp rounded corners clip cleanly
-            format = PixelFormat.TRANSLUCENT
+            x = 20
+            y = 160
         }
 
-        layoutCollapsed = root.findViewById(R.id.layoutCollapsed)
-        layoutExpanded = root.findViewById(R.id.layoutExpanded)
-        pillStatusDot = root.findViewById(R.id.pillStatusDot)
-        headerStatusDot = root.findViewById(R.id.headerStatusDot)
-        pillSquadCount = root.findViewById(R.id.pillSquadCount)
-        pillQuickMuteBtn = root.findViewById(R.id.pillQuickMuteBtn)
-        txtRoomTitle = root.findViewById(R.id.txtRoomTitle)
-        btnToggleMic = root.findViewById(R.id.btnToggleMic)
-        btnToggleDeafen = root.findViewById(R.id.btnToggleDeafen)
-        btnAudioRoute = root.findViewById(R.id.btnAudioRoute)
-        squadListContainer = root.findViewById(R.id.squadListContainer)
+        layoutCollapsed = root.findViewById(R.id.layout_hud_collapsed)
+        layoutExpanded = root.findViewById(R.id.layout_hud_expanded)
+        pillVoiceLed = root.findViewById(R.id.pill_voice_led)
+        pillSquadCount = root.findViewById(R.id.pill_squad_count)
+        pillTelemetryReadout = root.findViewById(R.id.pill_telemetry_readout)
+        pillBtnQuickMute = root.findViewById(R.id.pill_btn_quick_mute)
 
-        val btnCollapse = root.findViewById<View>(R.id.btnCollapse)
-        val headerDragArea = root.findViewById<View>(R.id.headerDragArea)
-        val btnDisconnect = root.findViewById<View>(R.id.btnDisconnect)
+        deckHeaderDragZone = root.findViewById(R.id.deck_header_drag_zone)
+        deckChannelTitle = root.findViewById(R.id.deck_channel_title)
+        deckBitrateBadge = root.findViewById(R.id.deck_bitrate_badge)
+        deckBtnCollapse = root.findViewById(R.id.deck_btn_collapse)
 
-        // Attach drag & tap handler to both the collapsed pill and the expanded header
+        btnToggleMic = root.findViewById(R.id.btn_toggle_mic)
+        txtStateMic = root.findViewById(R.id.txt_state_mic)
+        btnToggleDeafen = root.findViewById(R.id.btn_toggle_deafen)
+        txtStateDeafen = root.findViewById(R.id.txt_state_deafen)
+        btnToggleRoute = root.findViewById(R.id.btn_toggle_route)
+        txtStateRoute = root.findViewById(R.id.txt_state_route)
+        btnDisconnect = root.findViewById(R.id.btn_disconnect)
+
+        deckRosterContainer = root.findViewById(R.id.deck_roster_container)
+        deckBtnCopyInvite = root.findViewById(R.id.deck_btn_copy_invite)
+        deckPingReadout = root.findViewById(R.id.deck_ping_readout)
+
+        // Drag listener on collapsed pill and expanded header
         val dragTouchListener = createDragTouchListener(params) {
-            // On single tap of the collapsed pill -> expand tactical deck
+            // Expand to tactical deck on tap of collapsed pill
             if (layoutCollapsed.visibility == View.VISIBLE) {
                 layoutCollapsed.visibility = View.GONE
                 layoutExpanded.visibility = View.VISIBLE
                 rebuildSquadList()
                 windowManager.updateViewLayout(root, params)
+                vibrateTick()
             }
         }
 
         layoutCollapsed.setOnTouchListener(dragTouchListener)
-        headerDragArea.setOnTouchListener(createDragTouchListener(params, onTap = null))
+        deckHeaderDragZone.setOnTouchListener(createDragTouchListener(params, onTap = null))
 
-        btnCollapse.setOnClickListener {
+        deckBtnCollapse.setOnClickListener {
             layoutExpanded.visibility = View.GONE
             layoutCollapsed.visibility = View.VISIBLE
             windowManager.updateViewLayout(root, params)
+            vibrateTick()
         }
 
-        pillQuickMuteBtn.setOnClickListener { toggleMic() }
+        pillBtnQuickMute.setOnClickListener { toggleMic() }
         btnToggleMic.setOnClickListener { toggleMic() }
         btnToggleDeafen.setOnClickListener { toggleDeafen() }
-        btnAudioRoute.setOnClickListener { toggleAudioRoute() }
+        btnToggleRoute.setOnClickListener { toggleAudioRoute() }
         btnDisconnect.setOnClickListener { shutdownService() }
 
+        // 1-Tap Copy Squad Link
+        deckBtnCopyInvite.setOnClickListener {
+            copySquadInviteToClipboard()
+        }
+
         windowManager.addView(root, params)
+        updateMicUi()
+        updateDeafenUi()
+    }
+
+    private fun copySquadInviteToClipboard() {
+        val link = "vcpanel://join?room=$activeRoomCode"
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("SquadComms Channel", link))
+        Toast.makeText(this, "Copied invite link: $link", Toast.LENGTH_SHORT).show()
+        vibrateTick()
     }
 
     private fun toggleMic() {
         isMicEnabled = !isMicEnabled
-        // If user unmutes mic while deafened, automatically undeafen
         if (isMicEnabled && isDeafened) {
             isDeafened = false
             applyRemoteVolumes()
@@ -259,6 +300,7 @@ class VoiceOverlayService : Service() {
             room?.localParticipant?.setMicrophoneEnabled(isMicEnabled)
         }
         updateMicUi()
+        vibrateTick()
     }
 
     private fun toggleDeafen() {
@@ -270,117 +312,160 @@ class VoiceOverlayService : Service() {
         applyRemoteVolumes()
         updateMicUi()
         updateDeafenUi()
+        vibrateTick()
     }
 
     private fun toggleAudioRoute() {
         isSpeakerphone = !isSpeakerphone
         audioManager.isSpeakerphoneOn = isSpeakerphone
-        btnAudioRoute.text = if (isSpeakerphone) "OUT: SPKR" else "OUT: EAR"
-        btnAudioRoute.setTextColor(Color.parseColor(if (isSpeakerphone) "#38BDF8" else "#A78BFA"))
+        txtStateRoute.text = if (isSpeakerphone) "SPKR" else "EAR"
+        txtStateRoute.setTextColor(Color.parseColor(if (isSpeakerphone) "#00F58A" else "#7C869B"))
+        btnToggleRoute.isActivated = isSpeakerphone
+        vibrateTick()
     }
 
     private fun updateMicUi() {
-        val label = if (isMicEnabled) "MIC: ON" else "MUTED"
-        val color = Color.parseColor(if (isMicEnabled) "#00F59B" else "#FF3B5C")
-        btnToggleMic.text = label
-        btnToggleMic.setTextColor(color)
-        pillQuickMuteBtn.text = if (isMicEnabled) "MIC ON" else "MUTED"
-        pillQuickMuteBtn.setTextColor(color)
+        // Quick Mute button in collapsed pill
+        pillBtnQuickMute.isSelected = !isMicEnabled
+        pillBtnQuickMute.text = if (isMicEnabled) "MIC" else "MUTED"
+
+        // Grid Toggle button
+        btnToggleMic.isSelected = !isMicEnabled
+        btnToggleMic.isActivated = isMicEnabled
+        txtStateMic.text = if (isMicEnabled) "LIVE" else "MUTED"
+        txtStateMic.setTextColor(Color.parseColor(if (isMicEnabled) "#00F58A" else "#FF2A4B"))
     }
 
     private fun updateDeafenUi() {
-        btnToggleDeafen.text = if (isDeafened) "DEAF: ON" else "DEAF: OFF"
-        btnToggleDeafen.setTextColor(
-            Color.parseColor(if (isDeafened) "#FF3B5C" else "#E2E8F0")
-        )
+        btnToggleDeafen.isSelected = isDeafened
+        txtStateDeafen.text = if (isDeafened) "DEAF" else "NORM"
+        txtStateDeafen.setTextColor(Color.parseColor(if (isDeafened) "#FF2A4B" else "#7C869B"))
     }
 
     private fun rebuildSquadList() {
         val currentRoom = room ?: return
         val remotes = currentRoom.remoteParticipants.values.toList()
 
-        // Update pill squad count (including yourself)
-        pillSquadCount.text = "SQUAD [${remotes.size + 1}]"
+        val totalMembers = remotes.size + 1
+        pillSquadCount.text = String.format("%02d/%02d", totalMembers, totalMembers)
 
-        squadListContainer.removeAllViews()
+        deckRosterContainer.removeAllViews()
 
         if (remotes.isEmpty()) {
             val emptyTxt = TextView(this).apply {
-                text = "Waiting for squad..."
-                setTextColor(Color.parseColor("#64748B"))
+                text = "NO SQUAD OPERATORS DETECTED"
+                setTextColor(Color.parseColor("#464E62"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
                 typeface = android.graphics.Typeface.MONOSPACE
+                setPadding(0, dp(8), 0, dp(8))
             }
-            squadListContainer.addView(emptyTxt)
+            deckRosterContainer.addView(emptyTxt)
             return
         }
 
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+
         remotes.forEach { participant ->
-            val identity = participant.identity?.value ?: "Teammate"
-            val currentVol = participantVolumes.getOrPut(identity) { 100 }
+            val identity = participant.identity?.value ?: "OPERATOR"
+            val savedVol = participantVolumes.getOrPut(identity) {
+                prefs.getInt("vol_$identity", 100) // Persistent volume memory
+            }
 
             val row = LinearLayout(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { bottomMargin = dp(4) }
                 orientation = LinearLayout.VERTICAL
-                setPadding(0, 8, 0, 8)
+                setBackgroundResource(R.drawable.bg_roster_row)
+                setPadding(dp(10), dp(6), dp(8), dp(6))
                 tag = "ROW_$identity"
             }
 
-            val nameAndVolRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
+            val topBar = LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL
+                orientation = LinearLayout.HORIZONTAL
             }
 
-            val speakerDot = View(this).apply {
-                tag = "DOT_$identity"
-                layoutParams = LinearLayout.LayoutParams(dp(6), dp(6)).apply {
-                    marginEnd = dp(6)
-                }
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(Color.parseColor("#334155"))
-                }
+            val led = View(this).apply {
+                tag = "LED_$identity"
+                layoutParams = LinearLayout.LayoutParams(dp(6), dp(6))
+                setBackgroundResource(R.drawable.indicator_voice_led)
             }
 
-            val nameTxt = TextView(this).apply {
+            val callsignTxt = TextView(this).apply {
                 text = identity.uppercase()
-                setTextColor(Color.parseColor("#E2E8F0"))
+                setTextColor(Color.parseColor("#F0F4F8"))
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
                 typeface = android.graphics.Typeface.MONOSPACE
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                paint.isFakeBoldText = true
+                singleLine = true
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    leftMargin = dp(6)
+                }
             }
 
-            val volTxt = TextView(this).apply {
-                text = "$currentVol%"
-                setTextColor(Color.parseColor("#94A3B8"))
+            val gainReadout = TextView(this).apply {
+                tag = "GAIN_$identity"
+                updateGainText(this, savedVol)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
                 typeface = android.graphics.Typeface.MONOSPACE
+                paint.isFakeBoldText = true
             }
 
-            nameAndVolRow.addView(speakerDot)
-            nameAndVolRow.addView(nameTxt)
-            nameAndVolRow.addView(volTxt)
+            topBar.addView(led)
+            topBar.addView(callsignTxt)
+            topBar.addView(gainReadout)
 
-            // 0% to 200% Individual Volume Boost Slider
-            val slider = SeekBar(this).apply {
+            val seekbar = SeekBar(this).apply {
                 max = 200
-                progress = currentVol
+                progress = savedVol
+                progressDrawable = getDrawable(R.drawable.seekbar_gain_track)
+                thumb = getDrawable(R.drawable.seekbar_gain_thumb)
+                splitTrack = false
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(18)
+                ).apply { topMargin = dp(2) }
+                setPadding(dp(6), 0, dp(6), 0)
+
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                    override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                        participantVolumes[identity] = progress
-                        volTxt.text = "$progress%"
-                        setParticipantVolume(participant, progress)
+                    override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                        var effectiveProgress = progress
+                        // Magnetic 100% Unity Snap
+                        if (fromUser && progress in 96..104) {
+                            effectiveProgress = 100
+                            sb?.progress = 100
+                        }
+
+                        participantVolumes[identity] = effectiveProgress
+                        prefs.edit().putInt("vol_$identity", effectiveProgress).apply()
+                        updateGainText(gainReadout, effectiveProgress)
+                        setParticipantVolume(participant, effectiveProgress)
                     }
-                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                    override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+                    override fun onStartTrackingTouch(sb: SeekBar?) {}
+                    override fun onStopTrackingTouch(sb: SeekBar?) {}
                 })
             }
 
-            row.addView(nameAndVolRow)
-            row.addView(slider)
-            squadListContainer.addView(row)
+            row.addView(topBar)
+            row.addView(seekbar)
+            deckRosterContainer.addView(row)
 
-            // Ensure initial volume is applied
-            setParticipantVolume(participant, currentVol)
+            setParticipantVolume(participant, savedVol)
+        }
+    }
+
+    private fun updateGainText(textView: TextView, progress: Int) {
+        if (progress > 100) {
+            textView.text = "$progress% BOOST"
+            textView.setTextColor(Color.parseColor("#FFB300")) // Avionics Amber Overdrive
+        } else if (progress == 100) {
+            textView.text = "100%"
+            textView.setTextColor(Color.parseColor("#00F58A")) // Telemetry Emerald
+        } else {
+            textView.text = "$progress%"
+            textView.setTextColor(Color.parseColor("#7C869B")) // Etched Titanium
         }
     }
 
@@ -402,30 +487,42 @@ class VoiceOverlayService : Service() {
 
     private fun highlightActiveSpeakers(speakers: List<Participant>) {
         val activeIds = speakers.mapNotNull { it.identity?.value }.toSet()
-
-        // Pulse pill dot bright cyan when anyone is talking
         val isAnyoneTalking = activeIds.isNotEmpty()
-        updateStatusColor(if (isAnyoneTalking) "#00F59B" else "#334155")
 
-        // Highlight individual squad dots
-        for (i in 0 until squadListContainer.childCount) {
-            val child = squadListContainer.getChildAt(i)
+        // Collapsed pill reactive states
+        layoutCollapsed.isActivated = isAnyoneTalking
+        pillVoiceLed.isActivated = isAnyoneTalking
+
+        if (isAnyoneTalking) {
+            val firstSpeaker = activeIds.first()
+            pillTelemetryReadout.text = firstSpeaker.uppercase()
+        } else {
+            pillTelemetryReadout.text = "STANDBY"
+        }
+
+        // Roster row highlight states
+        for (i in 0 until deckRosterContainer.childCount) {
+            val child = deckRosterContainer.getChildAt(i)
             val rowTag = child.tag as? String ?: continue
             if (rowTag.startsWith("ROW_")) {
                 val id = rowTag.removePrefix("ROW_")
-                val dot = child.findViewWithTag<View>("DOT_$id")
-                val bg = dot?.background as? GradientDrawable
-                bg?.setColor(
-                    Color.parseColor(if (activeIds.contains(id)) "#00F59B" else "#334155")
-                )
+                val isSpeaker = activeIds.contains(id)
+                child.isActivated = isSpeaker
+                val led = child.findViewWithTag<View>("LED_$id")
+                led?.isActivated = isSpeaker
             }
         }
     }
 
-    private fun updateStatusColor(hex: String) {
-        val color = Color.parseColor(hex)
-        (pillStatusDot.background as? GradientDrawable)?.setColor(color)
-        (headerStatusDot.background as? GradientDrawable)?.setColor(color)
+    private fun vibrateTick() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                vibrator?.vibrate(VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(15)
+            }
+        } catch (_: Exception) {}
     }
 
     private fun createDragTouchListener(
@@ -470,10 +567,6 @@ class VoiceOverlayService : Service() {
         }
     }
 
-    /**
-     * Pure Kotlin HMAC-SHA256 LiveKit JWT Generator.
-     * Eliminates the need for a middleman backend server.
-     */
     private fun generateLiveKitJwt(
         apiKey: String,
         apiSecret: String,
@@ -498,7 +591,7 @@ class VoiceOverlayService : Service() {
             put("sub", identity)
             put("name", identity)
             put("nbf", nowSeconds - 10)
-            put("exp", nowSeconds + 86400) // Valid for 24 hours per session
+            put("exp", nowSeconds + 86400)
             put("video", videoGrant)
         }
 
@@ -532,7 +625,7 @@ class VoiceOverlayService : Service() {
 
         val notification = Notification.Builder(this, channelId)
             .setContentTitle("SquadComms Active")
-            .setContentText("96kbps Opus HUD running")
+            .setContentText("Tactical HUD running")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setOngoing(true)
             .build()

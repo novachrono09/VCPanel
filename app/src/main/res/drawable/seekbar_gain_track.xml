@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Recessed Track Trough (0% - 200%) -->
+    <item
+        android:id="@android:id/background"
+        android:gravity="center_vertical">
+        <shape android:shape="rectangle">
+            <size android:height="4dp" />
+            <solid android:color="#090A0D" />
+            <corners android:radius="2dp" />
+            <stroke
+                android:width="1dp"
+                android:color="#262C3A" />
+        </shape>
+    </item>
+
+    <!-- Secondary Progress (Optional Unity Baseline Reference) -->
+    <item
+        android:id="@android:id/secondaryProgress"
+        android:gravity="center_vertical">
+        <clip>
+            <shape android:shape="rectangle">
+                <size android:height="4dp" />
+                <solid android:color="#262C3A" />
+                <corners android:radius="2dp" />
+            </shape>
+        </clip>
+    </item>
+
+    <!-- Active Gain Fill -->
+    <item
+        android:id="@android:id/progress"
+        android:gravity="center_vertical">
+        <clip>
+            <shape android:shape="rectangle">
+                <size android:height="4dp" />
+                <solid android:color="#00F58A" />
+                <corners android:radius="2dp" />
+            </shape>
+        </clip>
+    </item>
+
+    <!-- 100% Unity Gain Center Calibration Tick Mark -->
+    <item android:gravity="center">
+        <shape android:shape="rectangle">
+            <size
+                android:width="2dp"
+                android:height="10dp" />
+            <solid android:color="#7C869B" />
+        </shape>
+    </item>
+</layer-list>
