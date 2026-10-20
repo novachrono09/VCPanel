@@ -12,6 +12,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -67,16 +68,19 @@ class VoiceOverlayService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var audioManager: AudioManager
     private var vibrator: Vibrator? = null
+    private var toneGenerator: ToneGenerator? = null
 
     private var overlayView: View? = null
     private var overlayParams: WindowManager.LayoutParams? = null
     private var room: Room? = null
     private var activeRoomCode = "SQ-884"
+    private var currentCallsign = "OPERATOR"
 
     // State flags
     private var isMicEnabled = true
     private var isDeafened = false
     private var isSpeakerphone = true
+    private var isPttMode = false
     private val participantVolumes = mutableMapOf<String, Int>()
 
     // UI References
@@ -111,6 +115,16 @@ class VoiceOverlayService : Service() {
         windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        try {
+            toneGenerator = ToneGenerator(AudioManager.STREAM_VOICE_CALL, 65)
+        } catch (_: Exception) {}
+
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        isPttMode = prefs.getBoolean("ptt_mode", false)
+        if (isPttMode) {
+            isMicEnabled = false
+        }
+
         startMinimalForegroundNotification()
         spawnTacticalOverlay()
     }
@@ -118,6 +132,7 @@ class VoiceOverlayService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val callsign = intent?.getStringExtra("CALLSIGN") ?: "OPERATOR"
         val roomCode = intent?.getStringExtra("ROOM_CODE") ?: "SQ-884"
+        currentCallsign = callsign
         activeRoomCode = roomCode
         deckChannelTitle.text = "CH // $roomCode"
         deckBtnCopyInvite.text = "[+] COPY // #$roomCode"
@@ -171,9 +186,19 @@ class VoiceOverlayService : Service() {
                     is RoomEvent.Reconnected -> {
                         deckPingReadout.text = "LIVE"
                         deckPingReadout.setTextColor(Color.parseColor("#00F58A"))
+                        currentRoom.localParticipant.setMicrophoneEnabled(isMicEnabled)
                     }
-                    is RoomEvent.ParticipantConnected,
-                    is RoomEvent.ParticipantDisconnected,
+                    is RoomEvent.ParticipantConnected -> {
+                        playChime(ToneGenerator.TONE_PROP_BEEP2, 110)
+                        rebuildSquadList()
+                    }
+                    is RoomEvent.ParticipantDisconnected -> {
+                        playChime(ToneGenerator.TONE_PROP_PROMPT, 130)
+                        rebuildSquadList()
+                    }
+                    is RoomEvent.DataReceived -> {
+                        handleDataReceived(event)
+                    }
                     is RoomEvent.TrackSubscribed,
                     is RoomEvent.TrackUnsubscribed -> {
                         rebuildSquadList()
@@ -264,11 +289,18 @@ class VoiceOverlayService : Service() {
             collapseDeckAnimated(root, params)
         }
 
-        attachSpringTouch(pillBtnQuickMute) { toggleMic() }
-        attachSpringTouch(btnToggleMic) { toggleMic() }
+        // Tactile Mic Controls (Dual Mode: Open Mic & PTT Hold-to-Talk)
+        setupMicControl(pillBtnQuickMute, isPill = true)
+        setupMicControl(btnToggleMic, isPill = false)
         attachSpringTouch(btnToggleDeafen) { toggleDeafen() }
         attachSpringTouch(btnToggleRoute) { toggleAudioRoute() }
         attachSpringTouch(btnDisconnect) { shutdownService() }
+
+        // Mode switch (Open Mic // 96K <-> PTT // 96K)
+        attachSpringTouch(deckBitrateBadge) { togglePttMode() }
+
+        // In-overlay Tactical Channel Cycler (Frequency switch on-the-fly)
+        attachSpringTouch(deckChannelTitle) { cycleToNextChannel() }
 
         // 1-Tap Copy Squad Link with tactile morph
         attachSpringTouch(deckBtnCopyInvite) {
@@ -276,6 +308,7 @@ class VoiceOverlayService : Service() {
         }
 
         windowManager.addView(root, params)
+        updateModeBadge()
         updateMicUi()
         updateDeafenUi()
     }
@@ -368,6 +401,7 @@ class VoiceOverlayService : Service() {
     }
 
     private fun toggleMic() {
+        if (isPttMode) return
         isMicEnabled = !isMicEnabled
         if (isMicEnabled && isDeafened) {
             isDeafened = false
@@ -377,8 +411,243 @@ class VoiceOverlayService : Service() {
         serviceScope.launch {
             room?.localParticipant?.setMicrophoneEnabled(isMicEnabled)
         }
+        playChime(if (isMicEnabled) ToneGenerator.TONE_CDMA_PIP else ToneGenerator.TONE_PROP_ACK, 40)
         updateMicUi()
         vibrateClick()
+    }
+
+    @SuppressLint("ClickableViewAccessibility")
+    private fun setupMicControl(view: View, isPill: Boolean) {
+        view.setOnTouchListener { v, event ->
+            if (isPttMode) {
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(60).start()
+                        if (!isDeafened) {
+                            setPttSpeaking(true)
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        v.animate().scaleX(1.0f).scaleY(1.0f)
+                            .setDuration(120)
+                            .setInterpolator(OvershootInterpolator(2.0f))
+                            .start()
+                        setPttSpeaking(false)
+                        true
+                    }
+                    else -> false
+                }
+            } else {
+                when (event.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(80).start()
+                        true
+                    }
+                    MotionEvent.ACTION_UP -> {
+                        v.animate().scaleX(1.0f).scaleY(1.0f)
+                            .setDuration(140)
+                            .setInterpolator(OvershootInterpolator(2.2f))
+                            .start()
+                        toggleMic()
+                        true
+                    }
+                    MotionEvent.ACTION_CANCEL -> {
+                        v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }
+    }
+
+    private fun setPttSpeaking(speaking: Boolean) {
+        if (speaking) {
+            isMicEnabled = true
+            serviceScope.launch { room?.localParticipant?.setMicrophoneEnabled(true) }
+            playChime(ToneGenerator.TONE_CDMA_PIP, 45)
+            vibrateDetent()
+
+            pillBtnQuickMute.isSelected = false
+            pillBtnQuickMute.text = "TALK"
+            pillVoiceLed.isActivated = true
+
+            btnToggleMic.isSelected = false
+            btnToggleMic.isActivated = true
+            txtStateMic.text = "TALK"
+            txtStateMic.setTextColor(Color.parseColor("#00F58A"))
+        } else {
+            isMicEnabled = false
+            serviceScope.launch { room?.localParticipant?.setMicrophoneEnabled(false) }
+            playChime(ToneGenerator.TONE_PROP_ACK, 45)
+
+            pillBtnQuickMute.isSelected = true
+            pillBtnQuickMute.text = "PTT"
+            pillVoiceLed.isActivated = false
+
+            btnToggleMic.isSelected = true
+            btnToggleMic.isActivated = false
+            txtStateMic.text = "HOLD"
+            txtStateMic.setTextColor(Color.parseColor("#FFB300"))
+        }
+    }
+
+    private fun togglePttMode() {
+        isPttMode = !isPttMode
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("ptt_mode", isPttMode).apply()
+        if (isPttMode) {
+            isMicEnabled = false
+            serviceScope.launch { room?.localParticipant?.setMicrophoneEnabled(false) }
+            playChime(ToneGenerator.TONE_PROP_BEEP2, 100)
+            Toast.makeText(this, "PTT: Press & hold to speak", Toast.LENGTH_SHORT).show()
+        } else {
+            isMicEnabled = true
+            serviceScope.launch { room?.localParticipant?.setMicrophoneEnabled(true) }
+            playChime(ToneGenerator.TONE_PROP_BEEP, 100)
+            Toast.makeText(this, "OPEN MIC: Always transmitting", Toast.LENGTH_SHORT).show()
+        }
+        updateModeBadge()
+        deckBitrateBadge.animate().scaleX(1.15f).scaleY(1.15f).setDuration(90).withEndAction {
+            deckBitrateBadge.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120).start()
+        }.start()
+        updateMicUi()
+        vibrateClick()
+    }
+
+    private fun updateModeBadge() {
+        if (isPttMode) {
+            deckBitrateBadge.text = "PTT // 96K"
+            deckBitrateBadge.setTextColor(Color.parseColor("#FFB300"))
+        } else {
+            deckBitrateBadge.text = "OPEN // 96K"
+            deckBitrateBadge.setTextColor(Color.parseColor("#00F58A"))
+        }
+    }
+
+    private fun cycleToNextChannel() {
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        val channels = mutableListOf<String>()
+        for (i in 0..3) {
+            val ch = prefs.getString("chip_$i", null)
+            if (!ch.isNullOrBlank() && !channels.contains(ch)) {
+                channels.add(ch)
+            }
+        }
+        val defaultList = listOf("SQ-884", "SCRIM-A", "APEX-01", "DUO-99")
+        for (d in defaultList) {
+            if (!channels.contains(d)) channels.add(d)
+        }
+
+        var idx = channels.indexOf(activeRoomCode)
+        if (idx == -1) idx = 0
+        val nextRoom = channels[(idx + 1) % channels.size]
+        switchToRoom(nextRoom)
+    }
+
+    private fun switchToRoom(newRoomCode: String) {
+        if (newRoomCode == activeRoomCode) return
+        activeRoomCode = newRoomCode
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("room", newRoomCode).putString("chip_0", newRoomCode).apply()
+
+        deckChannelTitle.text = "CH // $newRoomCode"
+        deckBtnCopyInvite.text = "[+] COPY // #$newRoomCode"
+        playChime(ToneGenerator.TONE_DTMF_D, 90)
+        vibrateClick()
+        Toast.makeText(this, "Frequency switched: #$newRoomCode", Toast.LENGTH_SHORT).show()
+
+        val oldRoom = room
+        room = null
+        serviceScope.launch {
+            try {
+                oldRoom?.disconnect()
+                oldRoom?.release()
+            } catch (_: Exception) {}
+            connectToVoiceBackend(currentCallsign, newRoomCode)
+        }
+    }
+
+    private fun sendSquadPing(targetIdentity: String, btn: TextView) {
+        vibrateClick()
+        playChime(ToneGenerator.TONE_PROP_ACK, 40)
+        btn.text = "SENT"
+        btn.setTextColor(Color.parseColor("#00F58A"))
+        btn.animate().scaleX(1.15f).scaleY(1.15f).setDuration(80).withEndAction {
+            btn.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
+        }.start()
+
+        mainHandler.postDelayed({
+            btn.text = "PING"
+            btn.setTextColor(Color.parseColor("#FFB300"))
+        }, 1500)
+
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                room?.localParticipant?.publishData(
+                    data = "PING:$targetIdentity".toByteArray(Charsets.UTF_8)
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun handleDataReceived(event: RoomEvent.DataReceived) {
+        val payload = try {
+            String(event.data, Charsets.UTF_8)
+        } catch (_: Exception) { "" }
+
+        val sender = event.participant?.identity?.value ?: "SQUADMATE"
+        if (payload.startsWith("PING:")) {
+            val target = payload.removePrefix("PING:")
+            if (target.equals(currentCallsign, ignoreCase = true) || target == "ALL") {
+                triggerSquadAlert(sender)
+            }
+        }
+    }
+
+    private fun triggerSquadAlert(sender: String) {
+        mainHandler.post {
+            playChime(ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE, 280)
+            vibrateAlert()
+            Toast.makeText(this, "🚨 PING FROM $sender!", Toast.LENGTH_SHORT).show()
+
+            pillTelemetryReadout.text = "! PING: $sender"
+            pillTelemetryReadout.setTextColor(Color.parseColor("#FF2A4B"))
+            pillVoiceLed.isActivated = true
+            pillVoiceLed.animate()
+                .scaleX(1.6f).scaleY(1.6f)
+                .setDuration(120)
+                .withEndAction {
+                    pillVoiceLed.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start()
+                }.start()
+
+            mainHandler.postDelayed({
+                pillTelemetryReadout.setTextColor(Color.parseColor("#F0F4F8"))
+                val hasActiveSpeakers = room?.remoteParticipants?.values?.any { it.isSpeaking } == true
+                if (!hasActiveSpeakers) {
+                    pillTelemetryReadout.text = "STANDBY"
+                    pillVoiceLed.isActivated = false
+                }
+            }, 3000)
+        }
+    }
+
+    private fun vibrateAlert() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator?.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 100, 70, 100, 70, 180), -1))
+            } else {
+                @Suppress("DEPRECATION")
+                vibrator?.vibrate(280)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun playChime(toneType: Int, durationMs: Int) {
+        try {
+            toneGenerator?.startTone(toneType, durationMs)
+        } catch (_: Exception) {}
     }
 
     private fun toggleDeafen() {
@@ -386,6 +655,9 @@ class VoiceOverlayService : Service() {
         if (isDeafened) {
             isMicEnabled = false
             serviceScope.launch { room?.localParticipant?.setMicrophoneEnabled(false) }
+            playChime(ToneGenerator.TONE_PROP_PROMPT, 90)
+        } else {
+            playChime(ToneGenerator.TONE_PROP_BEEP, 80)
         }
         applyRemoteVolumes()
         updateMicUi()
@@ -404,22 +676,33 @@ class VoiceOverlayService : Service() {
             txtStateRoute.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
         }.start()
 
+        playChime(ToneGenerator.TONE_PROP_BEEP, 50)
         vibrateClick()
     }
 
     private fun updateMicUi() {
-        pillBtnQuickMute.isSelected = !isMicEnabled
-        pillBtnQuickMute.text = if (isMicEnabled) "MIC" else "MUTED"
+        if (isPttMode) {
+            pillBtnQuickMute.isSelected = true
+            pillBtnQuickMute.text = "PTT"
 
-        btnToggleMic.isSelected = !isMicEnabled
-        btnToggleMic.isActivated = isMicEnabled
-        txtStateMic.text = if (isMicEnabled) "LIVE" else "MUTED"
-        txtStateMic.setTextColor(Color.parseColor(if (isMicEnabled) "#00F58A" else "#FF2A4B"))
+            btnToggleMic.isSelected = true
+            btnToggleMic.isActivated = false
+            txtStateMic.text = "HOLD"
+            txtStateMic.setTextColor(Color.parseColor("#FFB300"))
+        } else {
+            pillBtnQuickMute.isSelected = !isMicEnabled
+            pillBtnQuickMute.text = if (isMicEnabled) "MIC" else "MUTED"
 
-        // Pop pulse on state text
-        txtStateMic.animate().scaleX(1.18f).scaleY(1.18f).setDuration(80).withEndAction {
-            txtStateMic.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
-        }.start()
+            btnToggleMic.isSelected = !isMicEnabled
+            btnToggleMic.isActivated = isMicEnabled
+            txtStateMic.text = if (isMicEnabled) "LIVE" else "MUTED"
+            txtStateMic.setTextColor(Color.parseColor(if (isMicEnabled) "#00F58A" else "#FF2A4B"))
+
+            // Pop pulse on state text
+            txtStateMic.animate().scaleX(1.18f).scaleY(1.18f).setDuration(80).withEndAction {
+                txtStateMic.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
+            }.start()
+        }
     }
 
     private fun updateDeafenUi() {
@@ -495,6 +778,26 @@ class VoiceOverlayService : Service() {
                 }
             }
 
+            // P2P Squad Ping Trigger Button
+            val pingBtn = TextView(this).apply {
+                text = "PING"
+                setTextColor(Color.parseColor("#FFB300"))
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+                typeface = android.graphics.Typeface.MONOSPACE
+                paint.isFakeBoldText = true
+                gravity = Gravity.CENTER
+                setBackgroundResource(R.drawable.bg_tactile_ping)
+                setPadding(dp(6), dp(2), dp(6), dp(2))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    dp(20)
+                ).apply { rightMargin = dp(8) }
+
+                setOnClickListener {
+                    sendSquadPing(identity, this)
+                }
+            }
+
             val gainReadout = TextView(this).apply {
                 tag = "GAIN_$identity"
                 updateGainText(this, savedVol)
@@ -505,6 +808,7 @@ class VoiceOverlayService : Service() {
 
             topBar.addView(led)
             topBar.addView(callsignTxt)
+            topBar.addView(pingBtn)
             topBar.addView(gainReadout)
 
             var lastSnapped = false
@@ -774,6 +1078,8 @@ class VoiceOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        toneGenerator?.release()
+        toneGenerator = null
         room?.disconnect()
         room?.release()
         room = null

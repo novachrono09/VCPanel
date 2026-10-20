@@ -33,9 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v1.2.0 --yes || true
-          git tag -d v1.2.0 || true
-          git push origin :refs/tags/v1.2.0 || true
-          gh release create v1.2.0 app/build/outputs/apk/release/*.apk \
-            --title "SquadComms v1.2.0 (Micro-Interactions & Spring Animations)" \
-            --notes "Tactile spring feedback on all buttons, fluid pill-to-deck expand/collapse transitions, breathing voice LED, physical 100% detent haptic click, and animated invite link copy."
+          gh release delete v1.3.0 --yes || true
+          git tag -d v1.3.0 || true
+          git push origin :refs/tags/v1.3.0 || true
+          gh release create v1.3.0 app/build/outputs/apk/release/*.apk \
+            --title "SquadComms v1.3.0 (Permanent Keystore & Tactical PTT Suite)" \
+            --notes "Permanent release keystore for seamless in-place updates without uninstalling, synthesized tactical audio chimes via ToneGenerator, dual-mode Push-To-Talk (PTT) with radio key chirps and squelch tones, instant in-overlay channel cycler, and P2P squad haptic alert pings."

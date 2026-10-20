@@ -11,12 +11,21 @@ android {
         applicationId = "com.squad.tacticalvoice"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 3
+        versionName = "1.3.0"
 
         // Only bundle ARM64 native C++ libraries for modern Android phones to cut APK size in half
         ndk {
             abiFilters.add("arm64-v8a")
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("keystore.jks")
+            storePassword = "squadcomms"
+            keyAlias = "squadcomms"
+            keyPassword = "squadcomms"
         }
     }
 
@@ -28,7 +37,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug") // Easy install for friends
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
