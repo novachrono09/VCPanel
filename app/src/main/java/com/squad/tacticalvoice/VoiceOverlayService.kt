@@ -33,7 +33,7 @@ import io.livekit.android.events.collect
 import io.livekit.android.room.Room
 import io.livekit.android.room.participant.Participant
 import io.livekit.android.room.participant.RemoteParticipant
-import io.livekit.android.room.track.AudioTrackPublishDefaults
+import io.livekit.android.room.participant.AudioTrackPublishDefaults
 import io.livekit.android.room.track.LocalAudioTrackOptions
 import io.livekit.android.room.track.RemoteAudioTrack
 import kotlinx.coroutines.CoroutineScope
