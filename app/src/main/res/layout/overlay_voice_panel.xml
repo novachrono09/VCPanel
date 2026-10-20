@@ -63,22 +63,41 @@
             android:textSize="12sp"
             android:textStyle="bold" />
 
-        <!-- Active Speaker / Telemetry Readout (Tapping area expands deck) -->
-        <TextView
-            android:id="@+id/pill_telemetry_readout"
+        <!-- Center Telemetry & Live Squad Micro-Roster Deck -->
+        <FrameLayout
+            android:id="@+id/pill_roster_area"
             android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:ellipsize="end"
-            android:fontFamily="monospace"
-            android:gravity="center_vertical"
-            android:includeFontPadding="false"
-            android:maxWidth="84dp"
-            android:paddingRight="8dp"
-            android:singleLine="true"
-            android:text="STANDBY"
-            android:textColor="#F0F4F8"
-            android:textSize="11sp"
-            android:textStyle="bold" />
+            android:layout_height="match_parent">
+
+            <!-- Standby / Join Alert Banner -->
+            <TextView
+                android:id="@+id/pill_telemetry_readout"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:ellipsize="end"
+                android:fontFamily="monospace"
+                android:gravity="center_vertical"
+                android:includeFontPadding="false"
+                android:paddingLeft="2dp"
+                android:paddingRight="6dp"
+                android:singleLine="true"
+                android:text="STANDBY"
+                android:textColor="#F0F4F8"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:visibility="visible" />
+
+            <!-- Dynamic Horizontal Roster of Connected Squadmates -->
+            <LinearLayout
+                android:id="@+id/pill_members_container"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingLeft="2dp"
+                android:paddingRight="6dp"
+                android:visibility="gone" />
+        </FrameLayout>
 
         <!-- 1dp Structural Divider -->
         <View
@@ -128,20 +147,22 @@
 
             <!-- Tactile Grip Matrix -->
             <LinearLayout
+                android:id="@+id/deck_drag_handle"
                 android:layout_width="wrap_content"
                 android:layout_height="match_parent"
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
+                android:paddingLeft="2dp"
                 android:paddingRight="8dp">
 
                 <View
-                    android:layout_width="2dp"
-                    android:layout_height="12dp"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
                     android:background="#464E62" />
 
                 <View
-                    android:layout_width="2dp"
-                    android:layout_height="12dp"
+                    android:layout_width="3dp"
+                    android:layout_height="14dp"
                     android:layout_marginLeft="2dp"
                     android:background="#464E62" />
             </LinearLayout>

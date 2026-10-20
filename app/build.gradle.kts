@@ -11,8 +11,8 @@ android {
         applicationId = "com.squad.tacticalvoice"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "1.3.0"
+        versionCode = 4
+        versionName = "1.4.0"
 
         // Only bundle ARM64 native C++ libraries for modern Android phones to cut APK size in half
         ndk {

@@ -33,9 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v1.3.0 --yes || true
-          git tag -d v1.3.0 || true
-          git push origin :refs/tags/v1.3.0 || true
-          gh release create v1.3.0 app/build/outputs/apk/release/*.apk \
-            --title "SquadComms v1.3.0 (Permanent Keystore & Tactical PTT Suite)" \
-            --notes "Permanent release keystore for seamless in-place updates without uninstalling, synthesized tactical audio chimes via ToneGenerator, dual-mode Push-To-Talk (PTT) with radio key chirps and squelch tones, instant in-overlay channel cycler, and P2P squad haptic alert pings."
+          gh release delete v1.4.0 --yes || true
+          git tag -d v1.4.0 || true
+          git push origin :refs/tags/v1.4.0 || true
+          gh release create v1.4.0 app/build/outputs/apk/release/*.apk \
+            --title "SquadComms v1.4.0 (Live Pill Member Roster & Seamless Window Dragging)" \
+            --notes "Live squadmate member chips on the collapsed floating pill with active speaking states, midgame join/leave animated alert banners, and seamless conflict-free floating window dragging with native touch slop and screen bounds clamping."
