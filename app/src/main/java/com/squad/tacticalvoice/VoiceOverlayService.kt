@@ -399,7 +399,7 @@ class VoiceOverlayService : Service() {
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
                 typeface = android.graphics.Typeface.MONOSPACE
                 paint.isFakeBoldText = true
-                singleLine = true
+                isSingleLine = true
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
                     leftMargin = dp(6)
                 }
