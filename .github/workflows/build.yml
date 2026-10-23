@@ -33,9 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v1.5.0 --yes || true
-          git tag -d v1.5.0 || true
-          git push origin :refs/tags/v1.5.0 || true
-          gh release create v1.5.0 app/build/outputs/apk/release/*.apk \
-            --title "VOX v1.5.0 (Brand Identity, Material You Icon & Slide-to-Discard Physics)" \
-            --notes "Rebranded to VOX with modern Material You adaptive & themed icon support, and universal slide-away touch cancellation physics across all buttons."
+          gh release delete v1.6.0 --yes || true
+          git tag -d v1.6.0 || true
+          git push origin :refs/tags/v1.6.0 || true
+          gh release create v1.6.0 app/build/outputs/apk/release/*.apk \
+            --title "VOX v1.6.0 (Hardware DSP Speaker Bleed Cancellation & Clean Audio Engine)" \
+            --notes "Hardware DSP acoustic echo cancellation (HW-AEC) via MediaRecorder.AudioSource.VOICE_COMMUNICATION, hardware noise suppression, disabled AGC mic hunting, and full loudspeaker game sound isolation."

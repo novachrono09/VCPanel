@@ -12,6 +12,7 @@ import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.media.AudioManager
+import android.media.MediaRecorder
 import android.media.ToneGenerator
 import android.os.Build
 import android.os.Handler
@@ -149,14 +150,19 @@ class VoiceOverlayService : Service() {
     private fun connectToVoiceBackend(callsign: String, roomName: String) {
         if (room != null) return
 
+        try {
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        } catch (_: Exception) {}
+
         val roomOptions = RoomOptions(
             adaptiveStream = false,
             dynacast = false,
             audioTrackCaptureDefaults = LocalAudioTrackOptions(
                 noiseSuppression = true,
                 echoCancellation = true,
-                autoGainControl = true,
-                highPassFilter = true
+                autoGainControl = false,
+                highPassFilter = true,
+                typingNoiseDetection = true
             ),
             audioTrackPublishDefaults = AudioTrackPublishDefaults(
                 audioBitrate = 96_000,
@@ -170,7 +176,11 @@ class VoiceOverlayService : Service() {
             options = roomOptions,
             overrides = LiveKitOverrides(
                 audioOptions = AudioOptions(
-                    audioProcessorOptions = AudioProcessorOptions()
+                    javaAudioDeviceModuleCustomizer = { builder ->
+                        builder.setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+                        builder.setUseHardwareAcousticEchoCanceler(true)
+                        builder.setUseHardwareNoiseSuppressor(true)
+                    }
                 )
             )
         )
@@ -1252,6 +1262,9 @@ class VoiceOverlayService : Service() {
     override fun onDestroy() {
         alertBannerRunnable?.let { mainHandler.removeCallbacks(it) }
         alertBannerRunnable = null
+        try {
+            audioManager.mode = AudioManager.MODE_NORMAL
+        } catch (_: Exception) {}
         toneGenerator?.release()
         toneGenerator = null
         room?.disconnect()
