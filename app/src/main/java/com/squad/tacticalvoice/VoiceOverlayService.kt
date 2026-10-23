@@ -30,6 +30,9 @@ import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
@@ -113,6 +116,16 @@ class VoiceOverlayService : Service() {
     private lateinit var deckBtnCopyInvite: TextView
     private lateinit var deckPingReadout: TextView
 
+    private lateinit var tabBtnRoster: TextView
+    private lateinit var tabBtnChannels: TextView
+    private lateinit var deckTabContentRoster: LinearLayout
+    private lateinit var deckTabContentChannels: LinearLayout
+    private lateinit var deckActiveRoomTag: TextView
+    private lateinit var inputOverlayRoomCode: EditText
+    private lateinit var btnOverlayRandCode: TextView
+    private lateinit var btnOverlayJoinCode: TextView
+    private lateinit var deckRecentChannelsContainer: LinearLayout
+
     private var alertBannerRunnable: Runnable? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -138,11 +151,13 @@ class VoiceOverlayService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val callsign = intent?.getStringExtra("CALLSIGN") ?: "OPERATOR"
-        val roomCode = intent?.getStringExtra("ROOM_CODE") ?: "SQ-884"
+        val roomCode = (intent?.getStringExtra("ROOM_CODE") ?: "SQ-884").trim().uppercase()
         currentCallsign = callsign
         activeRoomCode = roomCode
+        recordChannelJoined(roomCode)
         deckChannelTitle.text = "CH // $roomCode"
         deckBtnCopyInvite.text = "[+] COPY // #$roomCode"
+        deckActiveRoomTag.text = "#$roomCode"
         connectToVoiceBackend(callsign, roomCode)
         return START_STICKY
     }
@@ -297,6 +312,16 @@ class VoiceOverlayService : Service() {
         deckBtnCopyInvite = root.findViewById(R.id.deck_btn_copy_invite)
         deckPingReadout = root.findViewById(R.id.deck_ping_readout)
 
+        tabBtnRoster = root.findViewById(R.id.tab_btn_roster)
+        tabBtnChannels = root.findViewById(R.id.tab_btn_channels)
+        deckTabContentRoster = root.findViewById(R.id.deck_tab_content_roster)
+        deckTabContentChannels = root.findViewById(R.id.deck_tab_content_channels)
+        deckActiveRoomTag = root.findViewById(R.id.deck_active_room_tag)
+        inputOverlayRoomCode = root.findViewById(R.id.input_overlay_room_code)
+        btnOverlayRandCode = root.findViewById(R.id.btn_overlay_rand_code)
+        btnOverlayJoinCode = root.findViewById(R.id.btn_overlay_join_code)
+        deckRecentChannelsContainer = root.findViewById(R.id.deck_recent_channels_container)
+
         // 1. Seamless Drag on collapsed pill (tapping anywhere expands deck, dragging moves smoothly)
         attachSeamlessDrag(layoutCollapsed, params) {
             if (layoutCollapsed.visibility == View.VISIBLE) {
@@ -309,12 +334,56 @@ class VoiceOverlayService : Service() {
             }
         }
 
-        // 2. Seamless Drag on expanded deck header bar (entire bar drags, taps execute cleanly with 0 conflict)
+        // 2. Seamless Drag on expanded deck header bar (entire bar drags with 0 click conflict)
         attachSeamlessDrag(deckHeaderDragZone, params, onClick = null)
         attachSeamlessDrag(deckDragHandle, params, onClick = null)
-        attachSeamlessDrag(deckChannelTitle, params) { cycleToNextChannel() }
+        attachSeamlessDrag(deckChannelTitle, params, onClick = null)
         attachSeamlessDrag(deckBitrateBadge, params) { togglePttMode() }
         attachSeamlessDrag(deckBtnCollapse, params) { collapseDeckAnimated(root, params) }
+
+        // Dual-Tab Navigation & Overlay Channel Switcher
+        attachSpringTouch(tabBtnRoster) {
+            selectDeckTab(isRoster = true)
+        }
+        attachSpringTouch(tabBtnChannels) {
+            selectDeckTab(isRoster = false)
+        }
+
+        attachSpringTouch(btnOverlayRandCode) {
+            vibrateClick()
+            btnOverlayRandCode.animate()
+                .rotationBy(360f)
+                .setDuration(240)
+                .setInterpolator(DecelerateInterpolator())
+                .start()
+            val prefixes = listOf("SQ", "VEX", "APEX", "GHOST", "VIPER", "TITAN")
+            val randCode = "${prefixes.random()}-${(100..999).random()}"
+            inputOverlayRoomCode.setText(randCode)
+            inputOverlayRoomCode.setSelection(randCode.length)
+        }
+
+        attachSpringTouch(btnOverlayJoinCode) {
+            val code = inputOverlayRoomCode.text.toString().trim().uppercase()
+            if (code.isNotEmpty()) {
+                switchToRoom(code)
+                inputOverlayRoomCode.text?.clear()
+                selectDeckTab(isRoster = true)
+            } else {
+                Toast.makeText(this, "Enter valid room code", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        inputOverlayRoomCode.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                val code = inputOverlayRoomCode.text.toString().trim().uppercase()
+                if (code.isNotEmpty()) {
+                    switchToRoom(code)
+                    inputOverlayRoomCode.text?.clear()
+                    selectDeckTab(isRoster = true)
+                }
+                true
+            } else false
+        }
 
         // 3. Tactile Controls
         setupMicControl(pillBtnQuickMute, isPill = true)
@@ -341,7 +410,7 @@ class VoiceOverlayService : Service() {
             .withEndAction {
                 layoutCollapsed.visibility = View.GONE
                 layoutExpanded.visibility = View.VISIBLE
-                rebuildSquadList()
+                selectDeckTab(isRoster = true)
                 windowManager.updateViewLayout(root, params)
 
                 layoutExpanded.scaleX = 0.88f
@@ -357,6 +426,7 @@ class VoiceOverlayService : Service() {
     }
 
     private fun collapseDeckAnimated(root: View, params: WindowManager.LayoutParams) {
+        setOverlayFocusable(false)
         layoutExpanded.animate()
             .scaleX(0.88f).scaleY(0.88f).alpha(0f)
             .setDuration(100)
@@ -575,37 +645,171 @@ class VoiceOverlayService : Service() {
         }
     }
 
-    private fun cycleToNextChannel() {
+    private fun setOverlayFocusable(focusable: Boolean) {
+        val params = overlayParams ?: return
+        val root = overlayView ?: return
+        val currentlyFocusable = (params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE) == 0
+        if (currentlyFocusable == focusable) return
+
+        if (focusable) {
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE.inv()
+        } else {
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.hideSoftInputFromWindow(root.windowToken, 0)
+        }
+        try {
+            windowManager.updateViewLayout(root, params)
+        } catch (_: Exception) {}
+    }
+
+    private fun selectDeckTab(isRoster: Boolean) {
+        vibrateClick()
+        if (isRoster) {
+            tabBtnRoster.isSelected = true
+            tabBtnRoster.setTextColor(Color.parseColor("#FF5500"))
+            tabBtnChannels.isSelected = false
+            tabBtnChannels.setTextColor(Color.parseColor("#7C869B"))
+
+            deckTabContentChannels.visibility = View.GONE
+            deckTabContentRoster.visibility = View.VISIBLE
+
+            setOverlayFocusable(false)
+            rebuildSquadList()
+        } else {
+            tabBtnChannels.isSelected = true
+            tabBtnChannels.setTextColor(Color.parseColor("#FF5500"))
+            tabBtnRoster.isSelected = false
+            tabBtnRoster.setTextColor(Color.parseColor("#7C869B"))
+
+            deckTabContentRoster.visibility = View.GONE
+            deckTabContentChannels.visibility = View.VISIBLE
+
+            setOverlayFocusable(true)
+            deckActiveRoomTag.text = "#$activeRoomCode"
+            rebuildRecentChannelsList()
+        }
+    }
+
+    private fun getChannelHistory(): MutableList<String> {
         val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
-        val channels = mutableListOf<String>()
+        val raw = prefs.getString("channel_history_v2", null)
+        val list = mutableListOf<String>()
+        if (!raw.isNullOrBlank()) {
+            raw.split(",").map { it.trim().uppercase() }.filter { it.isNotEmpty() }.forEach {
+                if (!list.contains(it)) list.add(it)
+            }
+        }
         for (i in 0..3) {
-            val ch = prefs.getString("chip_$i", null)
-            if (!ch.isNullOrBlank() && !channels.contains(ch)) {
-                channels.add(ch)
+            val chip = prefs.getString("chip_$i", null)?.trim()?.uppercase()
+            if (!chip.isNullOrBlank() && !list.contains(chip)) {
+                list.add(chip)
             }
         }
         val defaultList = listOf("SQ-884", "SCRIM-A", "APEX-01", "DUO-99")
         for (d in defaultList) {
-            if (!channels.contains(d)) channels.add(d)
+            if (!list.contains(d)) list.add(d)
+        }
+        return list
+    }
+
+    private fun recordChannelJoined(roomCode: String) {
+        val clean = roomCode.trim().uppercase()
+        if (clean.isBlank()) return
+        val list = getChannelHistory()
+        list.remove(clean)
+        list.add(0, clean)
+        if (list.size > 8) {
+            list.subList(8, list.size).clear()
+        }
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        prefs.edit()
+            .putString("channel_history_v2", list.joinToString(","))
+            .putString("room", clean)
+            .apply()
+    }
+
+    private fun rebuildRecentChannelsList() {
+        deckRecentChannelsContainer.removeAllViews()
+        val history = getChannelHistory()
+        if (!history.contains(activeRoomCode.uppercase())) {
+            history.add(0, activeRoomCode.uppercase())
         }
 
-        var idx = channels.indexOf(activeRoomCode)
+        history.take(6).forEach { roomCode ->
+            val isCurrent = roomCode.equals(activeRoomCode, ignoreCase = true)
+
+            val row = LinearLayout(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(30)
+                ).apply { bottomMargin = dp(4) }
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setBackgroundResource(if (isCurrent) R.drawable.bg_roster_row else R.drawable.bg_chip_channel)
+                setPadding(dp(10), dp(4), dp(8), dp(4))
+                isClickable = true
+                isFocusable = false
+            }
+
+            val titleView = TextView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+                text = "#$roomCode"
+                typeface = android.graphics.Typeface.MONOSPACE
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
+                setTextColor(Color.parseColor(if (isCurrent) "#00F58A" else "#F0F4F8"))
+                includeFontPadding = false
+            }
+
+            val badgeView = TextView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+                text = if (isCurrent) "● ACTIVE" else "HOP →"
+                typeface = android.graphics.Typeface.MONOSPACE
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
+                setTextColor(Color.parseColor(if (isCurrent) "#00F58A" else "#7C869B"))
+                includeFontPadding = false
+            }
+
+            row.addView(titleView)
+            row.addView(badgeView)
+
+            attachSpringTouch(row) {
+                if (!isCurrent) {
+                    switchToRoom(roomCode)
+                    selectDeckTab(isRoster = true)
+                }
+            }
+
+            deckRecentChannelsContainer.addView(row)
+        }
+    }
+
+    private fun cycleToNextChannel() {
+        val list = getChannelHistory()
+        if (!list.contains(activeRoomCode.uppercase())) {
+            list.add(0, activeRoomCode.uppercase())
+        }
+        var idx = list.indexOf(activeRoomCode.uppercase())
         if (idx == -1) idx = 0
-        val nextRoom = channels[(idx + 1) % channels.size]
+        val nextRoom = list[(idx + 1) % list.size]
         switchToRoom(nextRoom)
     }
 
     private fun switchToRoom(newRoomCode: String) {
-        if (newRoomCode == activeRoomCode) return
-        activeRoomCode = newRoomCode
-        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
-        prefs.edit().putString("room", newRoomCode).putString("chip_0", newRoomCode).apply()
+        val cleanRoomCode = newRoomCode.trim().uppercase()
+        if (cleanRoomCode == activeRoomCode) return
+        activeRoomCode = cleanRoomCode
+        recordChannelJoined(cleanRoomCode)
 
-        deckChannelTitle.text = "CH // $newRoomCode"
-        deckBtnCopyInvite.text = "[+] COPY // #$newRoomCode"
+        deckChannelTitle.text = "CH // $cleanRoomCode"
+        deckBtnCopyInvite.text = "[+] COPY // #$cleanRoomCode"
+        deckActiveRoomTag.text = "#$cleanRoomCode"
         playChime(ToneGenerator.TONE_DTMF_D, 90)
         vibrateClick()
-        Toast.makeText(this, "Frequency switched: #$newRoomCode", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Frequency switched: #$cleanRoomCode", Toast.LENGTH_SHORT).show()
 
         val oldRoom = room
         room = null
@@ -1260,6 +1464,7 @@ class VoiceOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        setOverlayFocusable(false)
         alertBannerRunnable?.let { mainHandler.removeCallbacks(it) }
         alertBannerRunnable = null
         try {

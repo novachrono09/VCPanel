@@ -54,10 +54,21 @@ class MainActivity : Activity() {
         inputCallsign.setText(savedName)
         inputChannelCode.setText(savedRoom)
 
-        // Setup 1-tap channel chips with spring feedback
+        // Setup 1-tap channel chips with spring feedback from persistent history
+        val rawHistory = prefs.getString("channel_history_v2", null)
+        val historyList = mutableListOf<String>()
+        if (!rawHistory.isNullOrBlank()) {
+            rawHistory.split(",").map { it.trim().uppercase() }.filter { it.isNotEmpty() }.forEach {
+                if (!historyList.contains(it)) historyList.add(it)
+            }
+        }
         val defaultChannels = listOf("SQ-884", "SCRIM-A", "APEX-01", "DUO-99")
+        for (d in defaultChannels) {
+            if (!historyList.contains(d)) historyList.add(d)
+        }
+
         for (i in recentChips.indices) {
-            val code = prefs.getString("chip_$i", defaultChannels[i]) ?: defaultChannels[i]
+            val code = if (i < historyList.size) historyList[i] else defaultChannels[i]
             val chip = recentChips[i]
             chip.text = "#$code"
             attachTactileSpring(chip) {
@@ -230,10 +241,22 @@ class MainActivity : Activity() {
         val roomCode = inputChannelCode.text.toString().trim().ifEmpty { "SQ-884" }.uppercase()
 
         val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        val raw = prefs.getString("channel_history_v2", null)
+        val list = mutableListOf<String>()
+        if (!raw.isNullOrBlank()) {
+            raw.split(",").map { it.trim().uppercase() }.filter { it.isNotEmpty() }.forEach {
+                if (!list.contains(it)) list.add(it)
+            }
+        }
+        list.remove(roomCode)
+        list.add(0, roomCode)
+        if (list.size > 8) list.subList(8, list.size).clear()
+
         prefs.edit()
             .putString("callsign", callsign)
             .putString("room", roomCode)
             .putString("chip_0", roomCode)
+            .putString("channel_history_v2", list.joinToString(","))
             .apply()
 
         val serviceIntent = Intent(this, VoiceOverlayService::class.java).apply {

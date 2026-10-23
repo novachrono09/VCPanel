@@ -378,84 +378,260 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 3. SQUAD ROSTER & GAIN TELEMETRY SECTION -->
+        <!-- 3. DUAL-TAB NAVIGATION (ROSTER vs CHANNELS) -->
         <LinearLayout
+            android:id="@+id/deck_tab_bar"
+            android:layout_width="match_parent"
+            android:layout_height="26dp"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:weightSum="2">
+
+            <!-- Tab 1: Roster -->
+            <TextView
+                android:id="@+id/tab_btn_roster"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginRight="3dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_tab_button"
+                android:clickable="true"
+                android:focusable="false"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.06"
+                android:text="👥 ROSTER"
+                android:textColor="#FF5500"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <!-- Tab 2: Channels -->
+            <TextView
+                android:id="@+id/tab_btn_channels"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginLeft="3dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_tab_button"
+                android:clickable="true"
+                android:focusable="false"
+                android:fontFamily="sans-serif-medium"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:letterSpacing="0.06"
+                android:text="📡 CHANNELS"
+                android:textColor="#7C869B"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- TAB CONTENT 1: SQUAD ROSTER & GAIN TELEMETRY -->
+        <LinearLayout
+            android:id="@+id/deck_tab_content_roster"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:layout_marginBottom="4dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
+            android:orientation="vertical"
+            android:visibility="visible">
 
-            <TextView
-                android:layout_width="0dp"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="sans-serif-medium"
+                    android:includeFontPadding="false"
+                    android:letterSpacing="0.1"
+                    android:text="SQUAD TELEMETRY"
+                    android:textColor="#7C869B"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:includeFontPadding="false"
+                    android:text="GAIN 0–200%"
+                    android:textColor="#464E62"
+                    android:textSize="9sp" />
+            </LinearLayout>
+
+            <!-- Dynamic Roster Container -->
+            <LinearLayout
+                android:id="@+id/deck_roster_container"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical" />
+
+            <!-- Roster Footer: 1-Tap Copy Invite & Ping Telemetry -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="28dp"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/deck_btn_copy_invite"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginRight="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_chip_channel"
+                    android:clickable="true"
+                    android:focusable="false"
+                    android:fontFamily="monospace"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:text="[+] COPY SQUAD LINK"
+                    android:textColor="#F0F4F8"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+
+                <!-- Live RTT Ping Telemetry Box -->
+                <TextView
+                    android:id="@+id/deck_ping_readout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/bg_badge_telemetry"
+                    android:fontFamily="monospace"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:paddingLeft="8dp"
+                    android:paddingRight="8dp"
+                    android:text="LIVE"
+                    android:textColor="#00F58A"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- TAB CONTENT 2: CHANNELS & DIRECT FREQUENCY HOP -->
+        <LinearLayout
+            android:id="@+id/deck_tab_content_channels"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <!-- Subheader: Switch Frequency -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:fontFamily="sans-serif-medium"
+                    android:includeFontPadding="false"
+                    android:letterSpacing="0.1"
+                    android:text="SWITCH FREQUENCY BY CODE"
+                    android:textColor="#7C869B"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/deck_active_room_tag"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:includeFontPadding="false"
+                    android:text="#SQ-884"
+                    android:textColor="#00F58A"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Direct Code Input Row -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="34dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/input_overlay_room_code"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_input_field"
+                    android:fontFamily="monospace"
+                    android:hint="ENTER ROOM CODE"
+                    android:imeOptions="actionDone"
+                    android:inputType="textCapCharacters|textNoSuggestions"
+                    android:paddingLeft="8dp"
+                    android:paddingRight="8dp"
+                    android:singleLine="true"
+                    android:textColor="#F0F4F8"
+                    android:textColorHint="#464E62"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <!-- Randomize Dice Button -->
+                <TextView
+                    android:id="@+id/btn_overlay_rand_code"
+                    android:layout_width="34dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginLeft="4dp"
+                    android:background="@drawable/bg_chip_channel"
+                    android:clickable="true"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:text="🎲"
+                    android:textSize="13sp" />
+
+                <!-- Hop/Switch Button -->
+                <TextView
+                    android:id="@+id/btn_overlay_join_code"
+                    android:layout_width="52dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginLeft="4dp"
+                    android:background="@drawable/bg_btn_deploy"
+                    android:clickable="true"
+                    android:focusable="false"
+                    android:fontFamily="monospace"
+                    android:gravity="center"
+                    android:includeFontPadding="false"
+                    android:text="HOP"
+                    android:textColor="#0B0D13"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- Subheader: Recent Frequencies -->
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:layout_marginBottom="4dp"
                 android:fontFamily="sans-serif-medium"
                 android:includeFontPadding="false"
                 android:letterSpacing="0.1"
-                android:text="SQUAD TELEMETRY"
+                android:text="RECENT FREQUENCIES (TAP TO HOP)"
                 android:textColor="#7C869B"
                 android:textSize="9sp"
                 android:textStyle="bold" />
 
-            <TextView
-                android:layout_width="wrap_content"
+            <!-- Dynamic Recent Channels Container -->
+            <LinearLayout
+                android:id="@+id/deck_recent_channels_container"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:includeFontPadding="false"
-                android:text="GAIN 0–200%"
-                android:textColor="#464E62"
-                android:textSize="9sp" />
-        </LinearLayout>
-
-        <!-- Dynamic Roster Container -->
-        <LinearLayout
-            android:id="@+id/deck_roster_container"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
-        <!-- 4. QUICK-ACTION FOOTER: 1-Tap Copy Invite & Ping Telemetry -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="28dp"
-            android:layout_marginTop="8dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <TextView
-                android:id="@+id/deck_btn_copy_invite"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginRight="6dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_chip_channel"
-                android:clickable="true"
-                android:focusable="false"
-                android:fontFamily="monospace"
-                android:gravity="center"
-                android:includeFontPadding="false"
-                android:text="[+] COPY SQUAD LINK"
-                android:textColor="#F0F4F8"
-                android:textSize="10sp"
-                android:textStyle="bold" />
-
-            <!-- Live RTT Ping Telemetry Box -->
-            <TextView
-                android:id="@+id/deck_ping_readout"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:background="@drawable/bg_badge_telemetry"
-                android:fontFamily="monospace"
-                android:gravity="center"
-                android:includeFontPadding="false"
-                android:paddingLeft="8dp"
-                android:paddingRight="8dp"
-                android:text="LIVE"
-                android:textColor="#00F58A"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                android:orientation="vertical" />
         </LinearLayout>
     </LinearLayout>
 
