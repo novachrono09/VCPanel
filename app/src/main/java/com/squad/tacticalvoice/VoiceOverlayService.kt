@@ -87,6 +87,7 @@ class VoiceOverlayService : Service() {
     private var isDeafened = false
     private var isSpeakerphone = true
     private var isPttMode = false
+    private var isPttSpeaking = false
     private val participantVolumes = mutableMapOf<String, Int>()
 
     // UI References: Edge Slider Handle & Expanded Command Deck
