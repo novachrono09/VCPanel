@@ -33,9 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v1.8.0 --yes || true
-          git tag -d v1.8.0 || true
-          git push origin :refs/tags/v1.8.0 || true
-          gh release create v1.8.0 app/build/outputs/apk/release/*.apk \
-            --title "VOX v1.8.0 (Side Slider Panel, Edge Docking, Corner Speaking Dots & Zero Emojis)" \
-            --notes "Tactical VOX v1.8.0 evolution: Edge slider tab docked seamlessly to left or right screen borders, slide-in/slide-out chassis animation, click-through corner member speaking dots with spring overshoot physics, deck header dot toggle [DOTS:ON/OFF], and complete zero-emoji tactical interface."
+          gh release delete v1.9.0 --yes || true
+          git tag -d v1.9.0 || true
+          git push origin :refs/tags/v1.9.0 || true
+          gh release create v1.9.0 app/build/outputs/apk/release/*.apk \
+            --title "VOX v1.9.0 (Zero-Latency PTT, Floating Constellation Dots & Fluid Edge Snapping)" \
+            --notes "VOX v1.9.0 major polish: Instant push-to-talk by holding edge slider or tactical keycap, synchronized zero-lag closing drawer animation, free-form 2D slider dragging with left-edge default and magnetic snapping, swipe anywhere on panel to close, borderless floating organic constellation speaking dots with circle-to-square morph physics, and modern vector icon drawables across all actions."

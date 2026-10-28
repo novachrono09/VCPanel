@@ -1,21 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/dots_container_root"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:background="@drawable/bg_dots_container"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:paddingLeft="6dp"
-    android:paddingTop="4dp"
-    android:paddingRight="6dp"
-    android:paddingBottom="4dp">
+    android:padding="6dp">
 
-    <!-- Container for dynamic member speaking dots -->
-    <LinearLayout
-        android:id="@+id/speaking_dots_list"
+    <!-- Dynamic organic constellation cluster for member speaking dots (No borders) -->
+    <FrameLayout
+        android:id="@+id/speaking_dots_cluster"
         android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal" />
-</LinearLayout>
+        android:layout_height="wrap_content" />
+</FrameLayout>
