@@ -623,9 +623,6 @@ class VoiceOverlayService : Service() {
         dotsOverlayView?.visibility = if (isDotsEnabled && members.isNotEmpty()) View.VISIBLE else View.GONE
     }
 
-        dotsOverlayView?.visibility = if (isDotsEnabled && members.isNotEmpty()) View.VISIBLE else View.GONE
-    }
-
     @SuppressLint("ClickableViewAccessibility")
     private fun attachEdgeSliderTouch(tab: View, params: WindowManager.LayoutParams) {
         val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
