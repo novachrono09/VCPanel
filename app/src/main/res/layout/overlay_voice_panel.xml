@@ -5,125 +5,25 @@
     android:layout_height="wrap_content">
 
     <!-- ================================================================== -->
-    <!-- MODE A: COLLAPSED MINI-HUD PILL (36dp Height Telemetry Capsule)    -->
+    <!-- MODE A: EDGE SLIDER HANDLE (Slim Edge Tab Docked to Mobile Border) -->
     <!-- ================================================================== -->
-    <LinearLayout
+    <FrameLayout
         android:id="@+id/layout_hud_collapsed"
-        android:layout_width="wrap_content"
-        android:layout_height="36dp"
-        android:background="@drawable/bg_hud_pill"
-        android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingLeft="10dp"
-        android:paddingRight="4dp"
+        android:layout_width="18dp"
+        android:layout_height="64dp"
+        android:background="@drawable/bg_edge_tab_right"
+        android:clickable="true"
+        android:focusable="false"
         android:visibility="visible">
 
-        <!-- Machined Drag Grip Anchor (2 vertical knurled bars) -->
+        <!-- Center Tactile Grip / Active Voice LED Strip -->
         <View
-            android:layout_width="2dp"
-            android:layout_height="12dp"
-            android:background="#464E62" />
-
-        <View
-            android:layout_width="2dp"
-            android:layout_height="12dp"
-            android:layout_marginLeft="2dp"
-            android:background="#464E62" />
-
-        <!-- Live Speaking Status LED (state_activated=speaking, state_selected=muted) -->
-        <View
-            android:id="@+id/pill_voice_led"
-            android:layout_width="8dp"
-            android:layout_height="8dp"
-            android:layout_marginLeft="8dp"
-            android:background="@drawable/indicator_voice_led" />
-
-        <!-- Squad CounterBadge -->
-        <TextView
-            android:id="@+id/pill_squad_count"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="6dp"
-            android:fontFamily="monospace"
-            android:includeFontPadding="false"
-            android:text="01/01"
-            android:textColor="#7C869B"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
-        <!-- Dot Separator -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginLeft="4dp"
-            android:layout_marginRight="4dp"
-            android:includeFontPadding="false"
-            android:text="·"
-            android:textColor="#464E62"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-
-        <!-- Center Telemetry & Live Squad Micro-Roster Deck -->
-        <FrameLayout
-            android:id="@+id/pill_roster_area"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent">
-
-            <!-- Standby / Join Alert Banner -->
-            <TextView
-                android:id="@+id/pill_telemetry_readout"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:ellipsize="end"
-                android:fontFamily="monospace"
-                android:gravity="center_vertical"
-                android:includeFontPadding="false"
-                android:paddingLeft="2dp"
-                android:paddingRight="6dp"
-                android:singleLine="true"
-                android:text="STANDBY"
-                android:textColor="#F0F4F8"
-                android:textSize="11sp"
-                android:textStyle="bold"
-                android:visibility="visible" />
-
-            <!-- Dynamic Horizontal Roster of Connected Squadmates -->
-            <LinearLayout
-                android:id="@+id/pill_members_container"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingLeft="2dp"
-                android:paddingRight="6dp"
-                android:visibility="gone" />
-        </FrameLayout>
-
-        <!-- 1dp Structural Divider -->
-        <View
-            android:layout_width="1dp"
-            android:layout_height="18dp"
-            android:layout_marginRight="4dp"
-            android:background="#262C3A" />
-
-        <!-- Integrated 1-Tap Quick-Mute Capsule Button -->
-        <TextView
-            android:id="@+id/pill_btn_quick_mute"
-            android:layout_width="wrap_content"
+            android:id="@+id/edge_tab_indicator"
+            android:layout_width="3dp"
             android:layout_height="28dp"
-            android:background="@drawable/bg_pill_mute_btn"
-            android:clickable="true"
-            android:focusable="false"
-            android:fontFamily="monospace"
-            android:gravity="center"
-            android:includeFontPadding="false"
-            android:paddingLeft="10dp"
-            android:paddingRight="10dp"
-            android:text="MIC"
-            android:textColor="#F0F4F8"
-            android:textSize="10sp"
-            android:textStyle="bold" />
-    </LinearLayout>
+            android:layout_gravity="center"
+            android:background="@drawable/indicator_voice_led" />
+    </FrameLayout>
 
     <!-- ================================================================== -->
     <!-- MODE B: EXPANDED CONTROL DECK (272dp Tactical Command Module)      -->
@@ -132,12 +32,12 @@
         android:id="@+id/layout_hud_expanded"
         android:layout_width="272dp"
         android:layout_height="wrap_content"
-        android:background="@drawable/bg_hud_chassis"
+        android:background="@drawable/bg_hud_chassis_right"
         android:orientation="vertical"
         android:padding="10dp"
         android:visibility="gone">
 
-        <!-- 1. HEADER BAR: Drag Handle, Channel ID, Bitrate Badge, Collapse -->
+        <!-- 1. HEADER BAR: Drag Handle, Channel ID, Dots Toggle, Bitrate Badge, Collapse -->
         <LinearLayout
             android:id="@+id/deck_header_drag_zone"
             android:layout_width="match_parent"
@@ -153,7 +53,7 @@
                 android:gravity="center_vertical"
                 android:orientation="horizontal"
                 android:paddingLeft="2dp"
-                android:paddingRight="8dp">
+                android:paddingRight="6dp">
 
                 <View
                     android:layout_width="3dp"
@@ -179,7 +79,26 @@
                 android:singleLine="true"
                 android:text="CH // SQUAD-1"
                 android:textColor="#F0F4F8"
-                android:textSize="12sp"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <!-- Speaking Dots Toggle Button [DOTS: ON/OFF] -->
+            <TextView
+                android:id="@+id/deck_btn_toggle_dots"
+                android:layout_width="wrap_content"
+                android:layout_height="20dp"
+                android:layout_marginRight="4dp"
+                android:background="@drawable/bg_chip_channel"
+                android:clickable="true"
+                android:focusable="false"
+                android:fontFamily="monospace"
+                android:gravity="center"
+                android:includeFontPadding="false"
+                android:paddingLeft="5dp"
+                android:paddingRight="5dp"
+                android:text="DOTS:ON"
+                android:textColor="#00F58A"
+                android:textSize="8sp"
                 android:textStyle="bold" />
 
             <!-- Audio Bitrate & Codec Telemetry Badge -->
@@ -187,32 +106,32 @@
                 android:id="@+id/deck_bitrate_badge"
                 android:layout_width="wrap_content"
                 android:layout_height="20dp"
-                android:layout_marginRight="6dp"
+                android:layout_marginRight="4dp"
                 android:background="@drawable/bg_badge_telemetry"
                 android:fontFamily="monospace"
                 android:gravity="center"
                 android:includeFontPadding="false"
-                android:paddingLeft="6dp"
-                android:paddingRight="6dp"
-                android:text="96K OPUS"
+                android:paddingLeft="5dp"
+                android:paddingRight="5dp"
+                android:text="OPEN // 96K"
                 android:textColor="#00F58A"
-                android:textSize="9sp"
+                android:textSize="8sp"
                 android:textStyle="bold" />
 
-            <!-- Collapse Trigger Button (—) -->
+            <!-- Collapse Trigger Button ([-]) -->
             <TextView
                 android:id="@+id/deck_btn_collapse"
-                android:layout_width="28dp"
-                android:layout_height="24dp"
+                android:layout_width="24dp"
+                android:layout_height="22dp"
                 android:background="@drawable/bg_chip_channel"
                 android:clickable="true"
                 android:focusable="false"
                 android:fontFamily="monospace"
                 android:gravity="center"
                 android:includeFontPadding="false"
-                android:text="—"
+                android:text="[-]"
                 android:textColor="#F0F4F8"
-                android:textSize="12sp"
+                android:textSize="10sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
@@ -378,7 +297,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- 3. DUAL-TAB NAVIGATION (ROSTER vs CHANNELS) -->
+        <!-- 3. DUAL-TAB NAVIGATION (ROSTER vs CHANNELS - ZERO EMOJIS) -->
         <LinearLayout
             android:id="@+id/deck_tab_bar"
             android:layout_width="match_parent"
@@ -401,7 +320,7 @@
                 android:gravity="center"
                 android:includeFontPadding="false"
                 android:letterSpacing="0.06"
-                android:text="👥 ROSTER"
+                android:text="ROSTER"
                 android:textColor="#FF5500"
                 android:textSize="10sp"
                 android:textStyle="bold" />
@@ -420,7 +339,7 @@
                 android:gravity="center"
                 android:includeFontPadding="false"
                 android:letterSpacing="0.06"
-                android:text="📡 CHANNELS"
+                android:text="CHANNELS"
                 android:textColor="#7C869B"
                 android:textSize="10sp"
                 android:textStyle="bold" />
@@ -459,7 +378,7 @@
                     android:layout_height="wrap_content"
                     android:fontFamily="monospace"
                     android:includeFontPadding="false"
-                    android:text="GAIN 0–200%"
+                    android:text="GAIN 0-200%"
                     android:textColor="#464E62"
                     android:textSize="9sp" />
             </LinearLayout>
@@ -580,19 +499,22 @@
                     android:textSize="11sp"
                     android:textStyle="bold" />
 
-                <!-- Randomize Dice Button -->
+                <!-- Randomize Button (Zero Emojis: Tactical [RND]) -->
                 <TextView
                     android:id="@+id/btn_overlay_rand_code"
-                    android:layout_width="34dp"
+                    android:layout_width="38dp"
                     android:layout_height="match_parent"
                     android:layout_marginLeft="4dp"
                     android:background="@drawable/bg_chip_channel"
                     android:clickable="true"
                     android:focusable="false"
+                    android:fontFamily="monospace"
                     android:gravity="center"
                     android:includeFontPadding="false"
-                    android:text="🎲"
-                    android:textSize="13sp" />
+                    android:text="RND"
+                    android:textColor="#F0F4F8"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
 
                 <!-- Hop/Switch Button -->
                 <TextView

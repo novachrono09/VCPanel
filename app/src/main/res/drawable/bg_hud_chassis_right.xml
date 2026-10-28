@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Outer Chamfer Edge for Right Docking -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#3A4358" />
+            <corners
+                android:topLeftRadius="8dp"
+                android:bottomLeftRadius="8dp"
+                android:topRightRadius="0dp"
+                android:bottomRightRadius="0dp" />
+        </shape>
+    </item>
+    <!-- Inner Recessed Frame -->
+    <item
+        android:bottom="1dp"
+        android:left="1dp"
+        android:right="0dp"
+        android:top="1dp">
+        <shape android:shape="rectangle">
+            <solid android:color="#090A0D" />
+            <corners
+                android:topLeftRadius="7dp"
+                android:bottomLeftRadius="7dp"
+                android:topRightRadius="0dp"
+                android:bottomRightRadius="0dp" />
+            <stroke
+                android:width="1dp"
+                android:color="#181C26" />
+        </shape>
+    </item>
+    <!-- Left Grip Telemetry Accent (Inner Edge Lip) -->
+    <item
+        android:gravity="left|center_vertical"
+        android:left="1dp">
+        <shape android:shape="rectangle">
+            <size
+                android:width="2dp"
+                android:height="40dp" />
+            <solid android:color="#FF5500" />
+            <corners android:radius="1dp" />
+        </shape>
+    </item>
+</layer-list>

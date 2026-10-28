@@ -11,6 +11,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.media.MediaRecorder
 import android.media.ToneGenerator
@@ -88,19 +89,33 @@ class VoiceOverlayService : Service() {
     private var isPttMode = false
     private val participantVolumes = mutableMapOf<String, Int>()
 
-    // UI References
+    // UI References: Edge Slider Handle & Expanded Command Deck
     private lateinit var layoutCollapsed: View
+    private lateinit var edgeTabIndicator: View
     private lateinit var layoutExpanded: View
-    private lateinit var pillVoiceLed: View
-    private lateinit var pillSquadCount: TextView
-    private lateinit var pillRosterArea: View
-    private lateinit var pillTelemetryReadout: TextView
-    private lateinit var pillMembersContainer: LinearLayout
-    private lateinit var pillBtnQuickMute: TextView
+    private var isDockedOnRight = true
+
+    // Floating Speaking Dots Overlay
+    private var dotsOverlayView: View? = null
+    private var dotsContainer: LinearLayout? = null
+    private var dotsParams: WindowManager.LayoutParams? = null
+    private var isDotsEnabled = true
+
+    private val MEMBER_DOT_COLORS = listOf(
+        "#00F58A", // Self / Neon Mint
+        "#00D2FF", // Electric Cyan
+        "#FF9500", // Avionics Amber
+        "#B366FF", // Neon Violet
+        "#FF3B69", // Coral Rose
+        "#FFEA00", // Laser Yellow
+        "#FF85D0", // Cyber Pink
+        "#4DEEEA"  // Turquoise
+    )
 
     private lateinit var deckHeaderDragZone: View
     private lateinit var deckDragHandle: View
     private lateinit var deckChannelTitle: TextView
+    private lateinit var deckBtnToggleDots: TextView
     private lateinit var deckBitrateBadge: TextView
     private lateinit var deckBtnCollapse: TextView
 
@@ -147,6 +162,7 @@ class VoiceOverlayService : Service() {
 
         startMinimalForegroundNotification()
         spawnTacticalOverlay()
+        spawnSpeakingDotsOverlay()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -158,6 +174,7 @@ class VoiceOverlayService : Service() {
         deckChannelTitle.text = "CH // $roomCode"
         deckBtnCopyInvite.text = "[+] COPY // #$roomCode"
         deckActiveRoomTag.text = "#$roomCode"
+        rebuildSpeakingDots()
         connectToVoiceBackend(callsign, roomCode)
         return START_STICKY
     }
@@ -221,13 +238,13 @@ class VoiceOverlayService : Service() {
                     }
                     is RoomEvent.ParticipantConnected -> {
                         val name = event.participant.identity?.value ?: "OPERATOR"
-                        showPillEventBanner("+ $name JOINED", "#00F58A")
+                        Toast.makeText(this@VoiceOverlayService, "[+] $name JOINED SQUAD", Toast.LENGTH_SHORT).show()
                         playChime(ToneGenerator.TONE_PROP_BEEP2, 110)
                         rebuildSquadList()
                     }
                     is RoomEvent.ParticipantDisconnected -> {
                         val name = event.participant.identity?.value ?: "OPERATOR"
-                        showPillEventBanner("– $name LEFT", "#FFB300")
+                        Toast.makeText(this@VoiceOverlayService, "[-] $name LEFT SQUAD", Toast.LENGTH_SHORT).show()
                         playChime(ToneGenerator.TONE_PROP_PROMPT, 130)
                         rebuildSquadList()
                     }
@@ -266,6 +283,12 @@ class VoiceOverlayService : Service() {
 
     @SuppressLint("ClickableViewAccessibility")
     private fun spawnTacticalOverlay() {
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        isDockedOnRight = prefs.getBoolean("docked_on_right", true)
+        val metrics = resources.displayMetrics
+        val handleWidth = dp(18)
+        val initialX = if (isDockedOnRight) maxOf(0, metrics.widthPixels - handleWidth) else 0
+
         val inflater = LayoutInflater.from(this)
         val root = inflater.inflate(R.layout.overlay_voice_panel, null)
         overlayView = root
@@ -280,23 +303,19 @@ class VoiceOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = 20
-            y = 160
+            x = initialX
+            y = dp(140)
         }
         overlayParams = params
 
         layoutCollapsed = root.findViewById(R.id.layout_hud_collapsed)
+        edgeTabIndicator = root.findViewById(R.id.edge_tab_indicator)
         layoutExpanded = root.findViewById(R.id.layout_hud_expanded)
-        pillVoiceLed = root.findViewById(R.id.pill_voice_led)
-        pillSquadCount = root.findViewById(R.id.pill_squad_count)
-        pillRosterArea = root.findViewById(R.id.pill_roster_area)
-        pillTelemetryReadout = root.findViewById(R.id.pill_telemetry_readout)
-        pillMembersContainer = root.findViewById(R.id.pill_members_container)
-        pillBtnQuickMute = root.findViewById(R.id.pill_btn_quick_mute)
 
         deckHeaderDragZone = root.findViewById(R.id.deck_header_drag_zone)
         deckDragHandle = root.findViewById(R.id.deck_drag_handle)
         deckChannelTitle = root.findViewById(R.id.deck_channel_title)
+        deckBtnToggleDots = root.findViewById(R.id.deck_btn_toggle_dots)
         deckBitrateBadge = root.findViewById(R.id.deck_bitrate_badge)
         deckBtnCollapse = root.findViewById(R.id.deck_btn_collapse)
 
@@ -322,26 +341,18 @@ class VoiceOverlayService : Service() {
         btnOverlayJoinCode = root.findViewById(R.id.btn_overlay_join_code)
         deckRecentChannelsContainer = root.findViewById(R.id.deck_recent_channels_container)
 
-        // 1. Seamless Drag on collapsed pill (tapping anywhere expands deck, dragging moves smoothly)
-        attachSeamlessDrag(layoutCollapsed, params) {
-            if (layoutCollapsed.visibility == View.VISIBLE) {
-                expandDeckAnimated(root, params)
-            }
-        }
-        attachSeamlessDrag(pillRosterArea, params) {
-            if (layoutCollapsed.visibility == View.VISIBLE) {
-                expandDeckAnimated(root, params)
-            }
-        }
+        // 1. Edge Slider Handle Drag & Slide
+        attachEdgeSliderTouch(layoutCollapsed, params)
 
-        // 2. Seamless Drag on expanded deck header bar (entire bar drags with 0 click conflict)
-        attachSeamlessDrag(deckHeaderDragZone, params, onClick = null)
-        attachSeamlessDrag(deckDragHandle, params, onClick = null)
-        attachSeamlessDrag(deckChannelTitle, params, onClick = null)
+        // 2. Seamless Drag on expanded deck header bar
+        attachDeckHeaderTouch(deckHeaderDragZone, params)
+        attachDeckHeaderTouch(deckDragHandle, params)
+        attachDeckHeaderTouch(deckChannelTitle, params)
+        setupDotsToggle(deckBtnToggleDots)
         attachSeamlessDrag(deckBitrateBadge, params) { togglePttMode() }
-        attachSeamlessDrag(deckBtnCollapse, params) { collapseDeckAnimated(root, params) }
+        attachSpringTouch(deckBtnCollapse) { collapseDeckAnimated(root, params) }
 
-        // Dual-Tab Navigation & Overlay Channel Switcher
+        // Dual-Tab Navigation & Overlay Channel Switcher (Zero Emojis)
         attachSpringTouch(tabBtnRoster) {
             selectDeckTab(isRoster = true)
         }
@@ -386,8 +397,7 @@ class VoiceOverlayService : Service() {
         }
 
         // 3. Tactile Controls
-        setupMicControl(pillBtnQuickMute, isPill = true)
-        setupMicControl(btnToggleMic, isPill = false)
+        setupMicControl(btnToggleMic)
         attachSpringTouch(btnToggleDeafen) { toggleDeafen() }
         attachSpringTouch(btnToggleRoute) { toggleAudioRoute() }
         attachSpringTouch(btnDisconnect) { shutdownService() }
@@ -397,53 +407,333 @@ class VoiceOverlayService : Service() {
             copySquadInviteToClipboard()
         }
 
+        updateDockSideUi()
         windowManager.addView(root, params)
         updateModeBadge()
         updateMicUi()
         updateDeafenUi()
     }
 
-    private fun expandDeckAnimated(root: View, params: WindowManager.LayoutParams) {
-        layoutCollapsed.animate()
-            .scaleX(0.85f).scaleY(0.85f).alpha(0f)
-            .setDuration(90)
-            .withEndAction {
-                layoutCollapsed.visibility = View.GONE
-                layoutExpanded.visibility = View.VISIBLE
-                selectDeckTab(isRoster = true)
-                windowManager.updateViewLayout(root, params)
+    private fun updateDockSideUi() {
+        val metrics = resources.displayMetrics
+        val handleWidth = dp(18)
+        val deckWidth = dp(272)
+        val params = overlayParams ?: return
+        val root = overlayView ?: return
 
-                layoutExpanded.scaleX = 0.88f
-                layoutExpanded.scaleY = 0.88f
-                layoutExpanded.alpha = 0f
-                layoutExpanded.animate()
-                    .scaleX(1.0f).scaleY(1.0f).alpha(1.0f)
-                    .setDuration(160)
-                    .setInterpolator(OvershootInterpolator(1.3f))
-                    .start()
-            }.start()
+        if (isDockedOnRight) {
+            layoutCollapsed.setBackgroundResource(R.drawable.bg_edge_tab_right)
+            layoutExpanded.setBackgroundResource(R.drawable.bg_hud_chassis_right)
+            if (layoutCollapsed.visibility == View.VISIBLE) {
+                params.x = maxOf(0, metrics.widthPixels - handleWidth)
+            } else {
+                params.x = maxOf(0, metrics.widthPixels - deckWidth)
+            }
+        } else {
+            layoutCollapsed.setBackgroundResource(R.drawable.bg_edge_tab_left)
+            layoutExpanded.setBackgroundResource(R.drawable.bg_hud_chassis_left)
+            params.x = 0
+        }
+
+        dotsParams?.let { dParams ->
+            dParams.gravity = Gravity.TOP or (if (isDockedOnRight) Gravity.START else Gravity.END)
+            dotsOverlayView?.let { windowManager.updateViewLayout(it, dParams) }
+        }
+
+        try {
+            windowManager.updateViewLayout(root, params)
+        } catch (_: Exception) {}
+    }
+
+    private fun spawnSpeakingDotsOverlay() {
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        isDotsEnabled = prefs.getBoolean("dots_enabled", true)
+
+        val inflater = LayoutInflater.from(this)
+        val dotsRoot = inflater.inflate(R.layout.layout_speaking_dots, null)
+        dotsOverlayView = dotsRoot
+        dotsContainer = dotsRoot.findViewById(R.id.speaking_dots_list)
+
+        val cornerGravity = Gravity.TOP or (if (isDockedOnRight) Gravity.START else Gravity.END)
+        val dParams = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = cornerGravity
+            x = dp(14)
+            y = dp(24)
+        }
+        dotsParams = dParams
+
+        dotsRoot.visibility = if (isDotsEnabled) View.VISIBLE else View.GONE
+        try {
+            windowManager.addView(dotsRoot, dParams)
+        } catch (_: Exception) {}
+    }
+
+    private fun setupDotsToggle(btn: TextView) {
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        isDotsEnabled = prefs.getBoolean("dots_enabled", true)
+        updateDotsToggleUi(btn)
+
+        attachSpringTouch(btn) {
+            toggleSpeakingDots(btn)
+        }
+    }
+
+    private fun toggleSpeakingDots(btn: TextView) {
+        isDotsEnabled = !isDotsEnabled
+        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("dots_enabled", isDotsEnabled).apply()
+        updateDotsToggleUi(btn)
+        dotsOverlayView?.visibility = if (isDotsEnabled) View.VISIBLE else View.GONE
+        vibrateClick()
+    }
+
+    private fun updateDotsToggleUi(btn: TextView) {
+        if (isDotsEnabled) {
+            btn.text = "[DOTS:ON]"
+            btn.setTextColor(Color.parseColor("#00F58A"))
+        } else {
+            btn.text = "[DOTS:OFF]"
+            btn.setTextColor(Color.parseColor("#7C869B"))
+        }
+    }
+
+    private fun rebuildSpeakingDots() {
+        val container = dotsContainer ?: return
+        container.removeAllViews()
+
+        val currentRoom = room
+        val members = mutableListOf<String>()
+        if (currentCallsign.isNotEmpty()) {
+            members.add(currentCallsign)
+        }
+        currentRoom?.remoteParticipants?.values?.forEach { p ->
+            p.identity?.value?.let { members.add(it) }
+        }
+
+        val dotSize = dp(8)
+        val dotMargin = dp(4)
+
+        members.forEachIndexed { index, identity ->
+            val dot = View(this).apply {
+                tag = "DOT_$identity"
+                val colorHex = MEMBER_DOT_COLORS[index % MEMBER_DOT_COLORS.size]
+                val circle = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.parseColor(colorHex))
+                }
+                background = circle
+                alpha = 0.35f
+                isSelected = false
+            }
+
+            val lParams = LinearLayout.LayoutParams(dotSize, dotSize).apply {
+                if (index > 0) {
+                    marginStart = dotMargin
+                }
+            }
+            container.addView(dot, lParams)
+        }
+
+        dotsOverlayView?.visibility = if (isDotsEnabled && members.isNotEmpty()) View.VISIBLE else View.GONE
+    }
+
+    private fun attachEdgeSliderTouch(tab: View, params: WindowManager.LayoutParams) {
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        var initialY = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+        var isDraggingY = false
+        var isSwipingInward = false
+
+        tab.setOnTouchListener { v, event ->
+            val metrics = resources.displayMetrics
+            val handleWidth = dp(18)
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isDraggingY = false
+                    isSwipingInward = false
+                    v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(60).start()
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - initialTouchX
+                    val dy = event.rawY - initialTouchY
+
+                    if (abs(dy) > touchSlop || isDraggingY) {
+                        isDraggingY = true
+                        val maxY = metrics.heightPixels - dp(90)
+                        params.y = (initialY + dy.toInt()).coerceIn(dp(40), maxY)
+                        overlayView?.let { windowManager.updateViewLayout(it, params) }
+                    }
+
+                    if (isDockedOnRight) {
+                        if (dx < -dp(14)) {
+                            isSwipingInward = true
+                        }
+                    } else {
+                        if (dx > dp(14)) {
+                            isSwipingInward = true
+                        }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(120)
+                        .setInterpolator(OvershootInterpolator(2.0f)).start()
+
+                    if (isSwipingInward || (!isDraggingY && abs(event.rawX - initialTouchX) < touchSlop && abs(event.rawY - initialTouchY) < touchSlop)) {
+                        expandDeckAnimated(overlayView ?: v, params)
+                    } else if (isDraggingY) {
+                        val screenMiddle = metrics.widthPixels / 2
+                        val shouldDockRight = event.rawX >= screenMiddle
+                        if (shouldDockRight != isDockedOnRight) {
+                            isDockedOnRight = shouldDockRight
+                            val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+                            prefs.edit().putBoolean("docked_on_right", isDockedOnRight).apply()
+                            vibrateClick()
+                        }
+                        params.x = if (isDockedOnRight) maxOf(0, metrics.widthPixels - handleWidth) else 0
+                        updateDockSideUi()
+                    }
+                    true
+                }
+                MotionEvent.ACTION_CANCEL -> {
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(80).start()
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun attachDeckHeaderTouch(view: View, params: WindowManager.LayoutParams) {
+        val touchSlop = ViewConfiguration.get(this).scaledTouchSlop
+        var initialY = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+        var isDraggingY = false
+
+        view.setOnTouchListener { v, event ->
+            val metrics = resources.displayMetrics
+            val deckWidth = dp(272)
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    isDraggingY = false
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = event.rawX - initialTouchX
+                    val dy = event.rawY - initialTouchY
+
+                    if (abs(dy) > touchSlop || isDraggingY) {
+                        isDraggingY = true
+                        val maxY = metrics.heightPixels - dp(180)
+                        params.y = (initialY + dy.toInt()).coerceIn(dp(40), maxY)
+                        overlayView?.let { windowManager.updateViewLayout(it, params) }
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    val dx = event.rawX - initialTouchX
+                    if (isDockedOnRight && dx > dp(36)) {
+                        collapseDeckAnimated(overlayView ?: v, params)
+                        return@setOnTouchListener true
+                    } else if (!isDockedOnRight && dx < -dp(36)) {
+                        collapseDeckAnimated(overlayView ?: v, params)
+                        return@setOnTouchListener true
+                    }
+
+                    val screenMiddle = metrics.widthPixels / 2
+                    val shouldDockRight = event.rawX >= screenMiddle
+                    if (isDraggingY && shouldDockRight != isDockedOnRight) {
+                        isDockedOnRight = shouldDockRight
+                        val prefs = getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+                        prefs.edit().putBoolean("docked_on_right", isDockedOnRight).apply()
+                        vibrateClick()
+                        params.x = if (isDockedOnRight) maxOf(0, metrics.widthPixels - deckWidth) else 0
+                        updateDockSideUi()
+                    }
+                    true
+                }
+                else -> false
+            }
+        }
+    }
+
+    private fun expandDeckAnimated(root: View, params: WindowManager.LayoutParams) {
+        val metrics = resources.displayMetrics
+        val deckWidth = dp(272)
+        params.x = if (isDockedOnRight) maxOf(0, metrics.widthPixels - deckWidth) else 0
+
+        layoutCollapsed.visibility = View.GONE
+        layoutExpanded.visibility = View.VISIBLE
+        selectDeckTab(isRoster = true)
+        updateDockSideUi()
+        windowManager.updateViewLayout(root, params)
+
+        val slideDistance = if (isDockedOnRight) deckWidth.toFloat() else -deckWidth.toFloat()
+        layoutExpanded.translationX = slideDistance
+        layoutExpanded.alpha = 0f
+        layoutExpanded.animate()
+            .translationX(0f)
+            .alpha(1.0f)
+            .setDuration(190)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+
         vibrateClick()
     }
 
     private fun collapseDeckAnimated(root: View, params: WindowManager.LayoutParams) {
         setOverlayFocusable(false)
+        val metrics = resources.displayMetrics
+        val handleWidth = dp(18)
+        val deckWidth = dp(272)
+        val slideDistance = if (isDockedOnRight) deckWidth.toFloat() else -deckWidth.toFloat()
+
         layoutExpanded.animate()
-            .scaleX(0.88f).scaleY(0.88f).alpha(0f)
-            .setDuration(100)
+            .translationX(slideDistance)
+            .alpha(0f)
+            .setDuration(140)
+            .setInterpolator(DecelerateInterpolator())
             .withEndAction {
                 layoutExpanded.visibility = View.GONE
                 layoutCollapsed.visibility = View.VISIBLE
+                params.x = if (isDockedOnRight) maxOf(0, metrics.widthPixels - handleWidth) else 0
+                updateDockSideUi()
                 windowManager.updateViewLayout(root, params)
 
+                layoutCollapsed.alpha = 0f
                 layoutCollapsed.scaleX = 0.85f
                 layoutCollapsed.scaleY = 0.85f
-                layoutCollapsed.alpha = 0f
                 layoutCollapsed.animate()
-                    .scaleX(1.0f).scaleY(1.0f).alpha(1.0f)
-                    .setDuration(140)
-                    .setInterpolator(OvershootInterpolator(1.6f))
+                    .alpha(1.0f)
+                    .scaleX(1.0f)
+                    .scaleY(1.0f)
+                    .setDuration(130)
+                    .setInterpolator(OvershootInterpolator(1.8f))
                     .start()
             }.start()
+
         vibrateClick()
     }
 
@@ -482,7 +772,7 @@ class VoiceOverlayService : Service() {
         clipboard.setPrimaryClip(ClipData.newPlainText("SquadComms Channel", link))
 
         // Morphing success micro-interaction
-        deckBtnCopyInvite.text = "[✓] LINK COPIED!"
+        deckBtnCopyInvite.text = "[COPIED]"
         deckBtnCopyInvite.setTextColor(Color.parseColor("#00F58A"))
         deckBtnCopyInvite.animate()
             .scaleX(1.05f).scaleY(1.05f)
@@ -516,7 +806,7 @@ class VoiceOverlayService : Service() {
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun setupMicControl(view: View, isPill: Boolean) {
+    private fun setupMicControl(view: View) {
         view.setOnTouchListener { v, event ->
             if (isPttMode) {
                 when (event.action) {
@@ -582,16 +872,14 @@ class VoiceOverlayService : Service() {
     }
 
     private fun setPttSpeaking(speaking: Boolean) {
+        isPttSpeaking = speaking
         if (speaking) {
             isMicEnabled = true
             serviceScope.launch { room?.localParticipant?.setMicrophoneEnabled(true) }
             playChime(ToneGenerator.TONE_CDMA_PIP, 45)
             vibrateDetent()
 
-            pillBtnQuickMute.isSelected = false
-            pillBtnQuickMute.text = "TALK"
-            pillVoiceLed.isActivated = true
-
+            edgeTabIndicator.isActivated = true
             btnToggleMic.isSelected = false
             btnToggleMic.isActivated = true
             txtStateMic.text = "TALK"
@@ -601,15 +889,13 @@ class VoiceOverlayService : Service() {
             serviceScope.launch { room?.localParticipant?.setMicrophoneEnabled(false) }
             playChime(ToneGenerator.TONE_PROP_ACK, 45)
 
-            pillBtnQuickMute.isSelected = true
-            pillBtnQuickMute.text = "PTT"
-            pillVoiceLed.isActivated = false
-
+            edgeTabIndicator.isActivated = false
             btnToggleMic.isSelected = true
             btnToggleMic.isActivated = false
             txtStateMic.text = "HOLD"
             txtStateMic.setTextColor(Color.parseColor("#FFB300"))
         }
+        highlightActiveSpeakers(room?.activeSpeakers ?: emptyList())
     }
 
     private fun togglePttMode() {
@@ -766,7 +1052,7 @@ class VoiceOverlayService : Service() {
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 )
-                text = if (isCurrent) "● ACTIVE" else "HOP →"
+                text = if (isCurrent) "[ACTIVE]" else "[HOP]"
                 typeface = android.graphics.Typeface.MONOSPACE
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
                 setTextColor(Color.parseColor(if (isCurrent) "#00F58A" else "#7C869B"))
@@ -863,24 +1149,19 @@ class VoiceOverlayService : Service() {
         mainHandler.post {
             playChime(ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE, 280)
             vibrateAlert()
-            Toast.makeText(this, "🚨 PING FROM $sender!", Toast.LENGTH_SHORT).show()
-
-            pillTelemetryReadout.text = "! PING: $sender"
-            pillTelemetryReadout.setTextColor(Color.parseColor("#FF2A4B"))
-            pillVoiceLed.isActivated = true
-            pillVoiceLed.animate()
+            Toast.makeText(this, "[PING] ALERT FROM $sender!", Toast.LENGTH_SHORT).show()
+            edgeTabIndicator.isActivated = true
+            edgeTabIndicator.animate()
                 .scaleX(1.6f).scaleY(1.6f)
                 .setDuration(120)
                 .withEndAction {
-                    pillVoiceLed.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start()
+                    edgeTabIndicator.animate().scaleX(1.0f).scaleY(1.0f).setDuration(150).start()
                 }.start()
 
             mainHandler.postDelayed({
-                pillTelemetryReadout.setTextColor(Color.parseColor("#F0F4F8"))
                 val hasActiveSpeakers = room?.remoteParticipants?.values?.any { it.isSpeaking } == true
                 if (!hasActiveSpeakers) {
-                    pillTelemetryReadout.text = "STANDBY"
-                    pillVoiceLed.isActivated = false
+                    edgeTabIndicator.isActivated = false
                 }
             }, 3000)
         }
@@ -935,17 +1216,11 @@ class VoiceOverlayService : Service() {
 
     private fun updateMicUi() {
         if (isPttMode) {
-            pillBtnQuickMute.isSelected = true
-            pillBtnQuickMute.text = "PTT"
-
             btnToggleMic.isSelected = true
             btnToggleMic.isActivated = false
             txtStateMic.text = "HOLD"
             txtStateMic.setTextColor(Color.parseColor("#FFB300"))
         } else {
-            pillBtnQuickMute.isSelected = !isMicEnabled
-            pillBtnQuickMute.text = if (isMicEnabled) "MIC" else "MUTED"
-
             btnToggleMic.isSelected = !isMicEnabled
             btnToggleMic.isActivated = isMicEnabled
             txtStateMic.text = if (isMicEnabled) "LIVE" else "MUTED"
@@ -956,6 +1231,7 @@ class VoiceOverlayService : Service() {
                 txtStateMic.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
             }.start()
         }
+        edgeTabIndicator.isActivated = isMicEnabled
     }
 
     private fun updateDeafenUi() {
@@ -968,117 +1244,11 @@ class VoiceOverlayService : Service() {
         }.start()
     }
 
-    private fun showPillEventBanner(text: String, colorHex: String) {
-        alertBannerRunnable?.let { mainHandler.removeCallbacks(it) }
-
-        pillMembersContainer.visibility = View.GONE
-        pillTelemetryReadout.visibility = View.VISIBLE
-        pillTelemetryReadout.text = text
-        pillTelemetryReadout.setTextColor(Color.parseColor(colorHex))
-
-        pillTelemetryReadout.scaleX = 0.85f
-        pillTelemetryReadout.scaleY = 0.85f
-        pillTelemetryReadout.animate()
-            .scaleX(1.10f).scaleY(1.10f)
-            .setDuration(120)
-            .withEndAction {
-                pillTelemetryReadout.animate().scaleX(1.0f).scaleY(1.0f).setDuration(100).start()
-            }.start()
-
-        val runnable = Runnable {
-            val remotes = room?.remoteParticipants?.values?.toList() ?: emptyList()
-            if (remotes.isNotEmpty()) {
-                pillTelemetryReadout.visibility = View.GONE
-                pillMembersContainer.visibility = View.VISIBLE
-            } else {
-                pillTelemetryReadout.text = "SOLO // STANDBY"
-                pillTelemetryReadout.setTextColor(Color.parseColor("#7C869B"))
-            }
-            alertBannerRunnable = null
-        }
-        alertBannerRunnable = runnable
-        mainHandler.postDelayed(runnable, 3500)
-    }
-
-    private fun rebuildPillRoster(remotes: List<RemoteParticipant>) {
-        pillMembersContainer.removeAllViews()
-
-        if (remotes.isEmpty()) {
-            if (alertBannerRunnable == null) {
-                pillMembersContainer.visibility = View.GONE
-                pillTelemetryReadout.visibility = View.VISIBLE
-                pillTelemetryReadout.text = "SOLO // STANDBY"
-                pillTelemetryReadout.setTextColor(Color.parseColor("#7C869B"))
-            }
-            return
-        }
-
-        if (alertBannerRunnable == null) {
-            pillTelemetryReadout.visibility = View.GONE
-            pillMembersContainer.visibility = View.VISIBLE
-        }
-
-        remotes.take(3).forEach { participant ->
-            val identity = participant.identity?.value ?: "OPERATOR"
-            val displayName = identity.take(5).uppercase()
-
-            val chip = LinearLayout(this).apply {
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    dp(22)
-                ).apply { rightMargin = dp(4) }
-                gravity = Gravity.CENTER_VERTICAL
-                orientation = LinearLayout.HORIZONTAL
-                setBackgroundResource(R.drawable.bg_pill_member_chip)
-                setPadding(dp(5), dp(2), dp(5), dp(2))
-                tag = "PILL_CHIP_$identity"
-            }
-
-            val led = View(this).apply {
-                tag = "PILL_LED_$identity"
-                layoutParams = LinearLayout.LayoutParams(dp(5), dp(5)).apply {
-                    rightMargin = dp(4)
-                }
-                setBackgroundResource(R.drawable.indicator_voice_led)
-            }
-
-            val txt = TextView(this).apply {
-                tag = "PILL_TXT_$identity"
-                text = displayName
-                setTextColor(Color.parseColor("#8B95A5"))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
-                typeface = android.graphics.Typeface.MONOSPACE
-                paint.isFakeBoldText = true
-                includeFontPadding = false
-            }
-
-            chip.addView(led)
-            chip.addView(txt)
-            pillMembersContainer.addView(chip)
-        }
-
-        if (remotes.size > 3) {
-            val moreTxt = TextView(this).apply {
-                text = "+${remotes.size - 3}"
-                setTextColor(Color.parseColor("#00F58A"))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
-                typeface = android.graphics.Typeface.MONOSPACE
-                paint.isFakeBoldText = true
-                includeFontPadding = false
-                setPadding(dp(2), 0, dp(4), 0)
-            }
-            pillMembersContainer.addView(moreTxt)
-        }
-    }
-
     private fun rebuildSquadList() {
         val currentRoom = room ?: return
         val remotes = currentRoom.remoteParticipants.values.toList()
 
-        val totalMembers = remotes.size + 1
-        pillSquadCount.text = String.format("%02d/%02d", totalMembers, totalMembers)
-
-        rebuildPillRoster(remotes)
+        rebuildSpeakingDots()
 
         deckRosterContainer.removeAllViews()
 
@@ -1252,25 +1422,43 @@ class VoiceOverlayService : Service() {
     }
 
     private fun highlightActiveSpeakers(speakers: List<Participant>) {
-        val activeIds = speakers.mapNotNull { it.identity?.value }.toSet()
+        val activeIds = speakers.mapNotNull { it.identity?.value }.toMutableSet()
+        if (isMicEnabled && !isDeafened && (room?.localParticipant?.isSpeaking == true || (isPttMode && isPttSpeaking))) {
+            activeIds.add(currentCallsign)
+        }
         val isAnyoneTalking = activeIds.isNotEmpty()
 
-        // Collapsed pill reactive states
+        // Edge slider tab live speaking state
         layoutCollapsed.isActivated = isAnyoneTalking
-        pillVoiceLed.isActivated = isAnyoneTalking
+        edgeTabIndicator.isActivated = isAnyoneTalking
 
-        if (isAnyoneTalking) {
-            val firstSpeaker = activeIds.first()
-            pillTelemetryReadout.text = firstSpeaker.uppercase()
-            // Breathing LED pulse on voice transmission
-            pillVoiceLed.animate()
-                .scaleX(1.35f).scaleY(1.35f)
-                .setDuration(100)
-                .withEndAction {
-                    pillVoiceLed.animate().scaleX(1.0f).scaleY(1.0f).setDuration(140).start()
-                }.start()
-        } else {
-            pillTelemetryReadout.text = "STANDBY"
+        // Dynamic Speaking Dots in screen corner with spring physics
+        dotsContainer?.let { container ->
+            for (i in 0 until container.childCount) {
+                val child = container.getChildAt(i)
+                val id = child.tag?.toString()?.removePrefix("DOT_") ?: continue
+                val isSpeaker = activeIds.contains(id)
+
+                if (isSpeaker && !child.isSelected) {
+                    child.isSelected = true
+                    child.animate()
+                        .scaleX(1.45f)
+                        .scaleY(1.45f)
+                        .alpha(1.0f)
+                        .setDuration(110)
+                        .setInterpolator(OvershootInterpolator(2.4f))
+                        .start()
+                } else if (!isSpeaker && child.isSelected) {
+                    child.isSelected = false
+                    child.animate()
+                        .scaleX(1.0f)
+                        .scaleY(1.0f)
+                        .alpha(0.35f)
+                        .setDuration(160)
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
+                }
+            }
         }
 
         // Roster row highlight states
@@ -1283,21 +1471,6 @@ class VoiceOverlayService : Service() {
                 child.isActivated = isSpeaker
                 val led = child.findViewWithTag<View>("LED_$id")
                 led?.isActivated = isSpeaker
-            }
-        }
-
-        // Pill member micro-chips highlight states
-        for (i in 0 until pillMembersContainer.childCount) {
-            val child = pillMembersContainer.getChildAt(i)
-            val chipTag = child.tag as? String ?: continue
-            if (chipTag.startsWith("PILL_CHIP_")) {
-                val id = chipTag.removePrefix("PILL_CHIP_")
-                val isSpeaker = activeIds.contains(id)
-                child.isActivated = isSpeaker
-                val led = child.findViewWithTag<View>("PILL_LED_$id")
-                led?.isActivated = isSpeaker
-                val txt = child.findViewWithTag<TextView>("PILL_TXT_$id")
-                txt?.setTextColor(Color.parseColor(if (isSpeaker) "#00F58A" else "#8B95A5"))
             }
         }
     }
@@ -1475,6 +1648,13 @@ class VoiceOverlayService : Service() {
         room?.disconnect()
         room?.release()
         room = null
+        dotsOverlayView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (_: Exception) {}
+        }
+        dotsOverlayView = null
+        dotsContainer = null
         overlayView?.let { windowManager.removeView(it) }
         overlayView = null
         serviceScope.cancel()

@@ -33,9 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v1.7.0 --yes || true
-          git tag -d v1.7.0 || true
-          git push origin :refs/tags/v1.7.0 || true
-          gh release create v1.7.0 app/build/outputs/apk/release/*.apk \
-            --title "VOX v1.7.0 (In-Overlay Channel Switcher & Conflict-Free Drag Header)" \
-            --notes "Dedicated In-Overlay [CHANNELS] tab for instant frequency hopping by code, dynamic recent channel history preserving custom codes, conflict-free header drag zone, and intelligent soft keyboard focus management."
+          gh release delete v1.8.0 --yes || true
+          git tag -d v1.8.0 || true
+          git push origin :refs/tags/v1.8.0 || true
+          gh release create v1.8.0 app/build/outputs/apk/release/*.apk \
+            --title "VOX v1.8.0 (Side Slider Panel, Edge Docking, Corner Speaking Dots & Zero Emojis)" \
+            --notes "Tactical VOX v1.8.0 evolution: Edge slider tab docked seamlessly to left or right screen borders, slide-in/slide-out chassis animation, click-through corner member speaking dots with spring overshoot physics, deck header dot toggle [DOTS:ON/OFF], and complete zero-emoji tactical interface."
