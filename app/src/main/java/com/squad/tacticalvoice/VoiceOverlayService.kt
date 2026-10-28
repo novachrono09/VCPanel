@@ -1568,7 +1568,7 @@ class VoiceOverlayService : Service() {
                 if (isSpeaker && !child.isSelected) {
                     child.isSelected = true
                     // Morphs from circle (5dp radius) to tactical rounded square (1.5dp radius)
-                    ValueAnimator.ofFloat(dp(5).toFloat(), dp(1.5f).toFloat()).apply {
+                    ValueAnimator.ofFloat(dpF(5f), dpF(1.5f)).apply {
                         duration = 110
                         addUpdateListener { va ->
                             (child.background as? GradientDrawable)?.cornerRadius = va.animatedValue as Float
@@ -1586,7 +1586,7 @@ class VoiceOverlayService : Service() {
                 } else if (!isSpeaker && child.isSelected) {
                     child.isSelected = false
                     // Morphs back from square (1.5dp radius) to circle (5dp radius)
-                    ValueAnimator.ofFloat(dp(1.5f).toFloat(), dp(5).toFloat()).apply {
+                    ValueAnimator.ofFloat(dpF(1.5f), dpF(5f)).apply {
                         duration = 140
                         addUpdateListener { va ->
                             (child.background as? GradientDrawable)?.cornerRadius = va.animatedValue as Float
@@ -1774,6 +1774,13 @@ class VoiceOverlayService : Service() {
             value.toFloat(),
             resources.displayMetrics
         ).toInt()
+
+    private fun dpF(value: Float): Float =
+        TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP,
+            value,
+            resources.displayMetrics
+        )
 
     private fun shutdownService() {
         stopForeground(STOP_FOREGROUND_REMOVE)
