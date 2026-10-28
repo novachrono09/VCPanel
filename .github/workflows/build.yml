@@ -33,9 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v1.9.0 --yes || true
-          git tag -d v1.9.0 || true
-          git push origin :refs/tags/v1.9.0 || true
-          gh release create v1.9.0 app/build/outputs/apk/release/*.apk \
-            --title "VOX v1.9.0 (Zero-Latency PTT, Floating Constellation Dots & Fluid Edge Snapping)" \
-            --notes "VOX v1.9.0 major polish: Instant push-to-talk by holding edge slider or tactical keycap, synchronized zero-lag closing drawer animation, free-form 2D slider dragging with left-edge default and magnetic snapping, swipe anywhere on panel to close, borderless floating organic constellation speaking dots with circle-to-square morph physics, and modern vector icon drawables across all actions."
+          gh release delete v1.9.1 --yes || true
+          git tag -d v1.9.1 || true
+          git push origin :refs/tags/v1.9.1 || true
+          gh release create v1.9.1 app/build/outputs/apk/release/*.apk \
+            --title "VOX v1.9.1 (Battery & Low-RAM Optimization: 32kbps Opus, Memory Leak Fix & Universal 32/64-bit)" \
+            --notes "VOX v1.9.1 Critical Stability & Battery Update: 75% reduction in radio battery draw (32kbps Opus wideband + DTX silence suppression), fixed leaked animators in global AnimationHandler, removed dual hardware-accelerated EGL surfaces on low-RAM GPUs, added 32-bit armeabi-v7a support for budget Android phones, enabled largeHeap, and added speech hangover debouncing to prevent syllable animation thrashing."

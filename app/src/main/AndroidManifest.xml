@@ -18,6 +18,7 @@
         android:icon="@drawable/ic_launcher"
         android:roundIcon="@drawable/ic_launcher_round"
         android:supportsRtl="true"
+        android:largeHeap="true"
         android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
 
         <activity

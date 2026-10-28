@@ -117,7 +117,7 @@
                 android:includeFontPadding="false"
                 android:paddingLeft="5dp"
                 android:paddingRight="5dp"
-                android:text="OPEN // 96K"
+                android:text="OPEN // 32K"
                 android:textColor="#00F58A"
                 android:textSize="8sp"
                 android:textStyle="bold" />
