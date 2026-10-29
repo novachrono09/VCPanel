@@ -9,14 +9,14 @@
                     <corners android:radius="4dp" />
                     <stroke
                         android:width="1dp"
-                        android:color="#00F58A" />
+                        android:color="#FFFFFF" />
                 </shape>
             </item>
             <!-- Left Voice Telemetry Rail -->
             <item android:gravity="left|fill_vertical">
                 <shape android:shape="rectangle">
                     <size android:width="3dp" />
-                    <solid android:color="#00F58A" />
+                    <solid android:color="#FFFFFF" />
                     <corners
                         android:bottomLeftRadius="4dp"
                         android:topLeftRadius="4dp" />

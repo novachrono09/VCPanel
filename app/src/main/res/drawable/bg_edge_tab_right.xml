@@ -11,7 +11,7 @@
                 android:bottomRightRadius="0dp" />
             <stroke
                 android:width="1.5dp"
-                android:color="#00F58A" />
+                android:color="#FFFFFF" />
         </shape>
     </item>
     <item android:state_pressed="true">
@@ -24,7 +24,7 @@
                 android:bottomRightRadius="0dp" />
             <stroke
                 android:width="1.5dp"
-                android:color="#FF5500" />
+                android:color="#464E62" />
         </shape>
     </item>
     <!-- Default Right-Docked Handle -->

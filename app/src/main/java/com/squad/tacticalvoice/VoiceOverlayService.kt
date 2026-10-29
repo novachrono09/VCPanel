@@ -12,11 +12,15 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.ColorStateList
 import android.content.pm.ServiceInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.PorterDuff
 import android.graphics.Typeface
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.LayerDrawable
 import android.media.AudioManager
 import android.media.MediaRecorder
 import android.media.ToneGenerator
@@ -33,6 +37,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewConfiguration
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 import android.view.animation.OvershootInterpolator
@@ -87,6 +92,7 @@ class VoiceOverlayService : Service() {
         private const val COLOR_MUTED = 0xFF7C869B.toInt()
         private const val COLOR_WHITE = 0xFFF0F4F8.toInt()
         private const val COLOR_DARK_ROW = 0xFF464E62.toInt()
+        private const val COLOR_DARK_BORDER = 0xFF262C3A.toInt()
         private const val COLOR_BG_ACTIVE = 0xFF1F1410.toInt()
         private const val COLOR_BG_INACTIVE = 0xFF181C26.toInt()
     }
@@ -127,6 +133,9 @@ class VoiceOverlayService : Service() {
     private var pingAlertMode = "full" // "full", "flash", "mute"
     private var autoCollapseSeconds = 0 // 0: off, 5, 10
     private var swipeSensitivityDp = 20
+    private var isVoiceBlinkEnabled = true
+    private var currentDeckTab = 0
+    private val allSegmentItemUpdaters = mutableListOf<(Int) -> Unit>()
 
     // UI References: Edge Slider Handle & Expanded Command Deck
     private lateinit var layoutCollapsed: View
@@ -233,6 +242,7 @@ class VoiceOverlayService : Service() {
         pingAlertMode = prefs.getString("ping_alert_mode", "full") ?: "full"
         autoCollapseSeconds = prefs.getInt("auto_collapse_sec", 0)
         swipeSensitivityDp = prefs.getInt("swipe_sensitivity", 20)
+        isVoiceBlinkEnabled = prefs.getBoolean("pref_voice_blink", true)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -516,15 +526,84 @@ class VoiceOverlayService : Service() {
             Pair(R.id.btn_theme_violet, THEME_VIOLET),
             Pair(R.id.btn_theme_ghost, THEME_GHOST)
         )
+
+        val customColorPreview = root.findViewById<View>(R.id.custom_color_preview)
+        val editCustomHex = root.findViewById<EditText>(R.id.edit_custom_hex)
+        val btnApplyHex = root.findViewById<TextView>(R.id.btn_apply_hex)
+        val seekbarCustomHue = root.findViewById<SeekBar>(R.id.seekbar_custom_hue)
+
         swatches.forEach { (viewId, color) ->
             root.findViewById<View>(viewId)?.let { v ->
                 attachSpringTouch(v) {
                     currentAccentColor = color
                     getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
                         .edit().putInt("custom_accent", color).apply()
+
+                    val hsv = FloatArray(3)
+                    Color.colorToHSV(color, hsv)
+                    seekbarCustomHue?.progress = hsv[0].toInt().coerceIn(0, 360)
+                    customColorPreview?.background = createSwatchDrawable(color)
+                    editCustomHex?.setText(String.format("#%06X", (0xFFFFFF and color)))
+
                     applyAccentColor(color)
                     vibrateClick()
                 }
+            }
+        }
+
+        // Feature 1: Custom Accent Spectrum & Hex Input
+        val rainbowColors = intArrayOf(
+            0xFFFF0000.toInt(),
+            0xFFFFFF00.toInt(),
+            0xFF00FF00.toInt(),
+            0xFF00FFFF.toInt(),
+            0xFF0000FF.toInt(),
+            0xFFFF00FF.toInt(),
+            0xFFFF0000.toInt()
+        )
+        val rainbowTrack = GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT, rainbowColors).apply {
+            cornerRadius = dp(2).toFloat()
+        }
+        seekbarCustomHue?.progressDrawable = rainbowTrack
+
+        val initialHsv = FloatArray(3)
+        Color.colorToHSV(currentAccentColor, initialHsv)
+        seekbarCustomHue?.progress = initialHsv[0].toInt().coerceIn(0, 360)
+        customColorPreview?.background = createSwatchDrawable(currentAccentColor)
+        editCustomHex?.setText(String.format("#%06X", (0xFFFFFF and currentAccentColor)))
+
+        seekbarCustomHue?.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    val color = Color.HSVToColor(floatArrayOf(progress.toFloat(), 0.90f, 1.0f))
+                    currentAccentColor = color
+                    customColorPreview?.background = createSwatchDrawable(color)
+                    editCustomHex?.setText(String.format("#%06X", (0xFFFFFF and color)))
+                    applyAccentColor(color)
+                }
+            }
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {
+                getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+                    .edit().putInt("custom_accent", currentAccentColor).apply()
+                vibrateClick()
+            }
+        })
+
+        editCustomHex?.setOnFocusChangeListener { _, hasFocus ->
+            setOverlayFocusable(hasFocus)
+        }
+
+        editCustomHex?.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                applyCustomHexFromInput(editCustomHex, customColorPreview, seekbarCustomHue)
+                true
+            } else false
+        }
+
+        btnApplyHex?.let { btn ->
+            attachSpringTouch(btn) {
+                applyCustomHexFromInput(editCustomHex, customColorPreview, seekbarCustomHue)
             }
         }
 
@@ -573,6 +652,21 @@ class VoiceOverlayService : Service() {
             getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
                 .edit().putBoolean("ghost_fade", enabled).apply()
             resetGhostFadeTimer()
+        }
+
+        // Feature 2: Voice Speaking Blink
+        setupSegmentGroup(
+            listOf(
+                Triple(root.findViewById(R.id.btn_voice_blink_on), true, isVoiceBlinkEnabled),
+                Triple(root.findViewById(R.id.btn_voice_blink_off), false, !isVoiceBlinkEnabled)
+            )
+        ) { enabled ->
+            isVoiceBlinkEnabled = enabled
+            getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+                .edit().putBoolean("pref_voice_blink", enabled).apply()
+            if (!enabled) {
+                applyHandleSpeakingUi(false)
+            }
         }
 
         // Feature 2: Handle Width
@@ -702,35 +796,337 @@ class VoiceOverlayService : Service() {
         }
     }
 
+    private fun applyCustomHexFromInput(
+        editCustomHex: EditText?,
+        customColorPreview: View?,
+        seekbarCustomHue: SeekBar?
+    ) {
+        val raw = editCustomHex?.text?.toString()?.trim() ?: return
+        try {
+            val hex = if (raw.startsWith("#")) raw else "#$raw"
+            val parsedColor = Color.parseColor(hex)
+            currentAccentColor = parsedColor
+            getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+                .edit().putInt("custom_accent", parsedColor).apply()
+
+            val hsv = FloatArray(3)
+            Color.colorToHSV(parsedColor, hsv)
+            seekbarCustomHue?.progress = hsv[0].toInt().coerceIn(0, 360)
+            customColorPreview?.background = createSwatchDrawable(parsedColor)
+            applyAccentColor(parsedColor)
+            vibrateClick()
+            setOverlayFocusable(false)
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.hideSoftInputFromWindow(editCustomHex.windowToken, 0)
+        } catch (_: Exception) {
+            Toast.makeText(this, "INVALID HEX (USE #RRGGBB)", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun <T> setupSegmentGroup(
         items: List<Triple<TextView?, T, Boolean>>,
         onSelect: (T) -> Unit
     ) {
+        var currentSelectedValue: T? = items.firstOrNull { it.third }?.second
+
+        val updater: (Int) -> Unit = { accent ->
+            items.forEach { (view, value, _) ->
+                if (view != null) {
+                    val isSelected = (value == currentSelectedValue)
+                    view.isSelected = isSelected
+                    view.setTextColor(if (isSelected) accent else COLOR_MUTED)
+                    view.background = createSegmentChipDrawable(isSelected, accent)
+                }
+            }
+        }
+        allSegmentItemUpdaters.add(updater)
+
         items.forEach { (view, value, initialSelected) ->
             if (view == null) return@forEach
             view.isSelected = initialSelected
             view.setTextColor(if (initialSelected) currentAccentColor else COLOR_MUTED)
+            view.background = createSegmentChipDrawable(initialSelected, currentAccentColor)
 
             attachSpringTouch(view) {
-                items.forEach { (otherView, _, _) ->
-                    otherView?.isSelected = (otherView == view)
-                    otherView?.setTextColor(if (otherView == view) currentAccentColor else COLOR_MUTED)
-                }
+                currentSelectedValue = value
+                updater(currentAccentColor)
                 vibrateClick()
                 onSelect(value)
             }
         }
     }
 
+    private fun createSwatchDrawable(color: Int): Drawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(3).toFloat()
+            setColor(color)
+            setStroke(dp(1), 0xFFFFFFFF.toInt())
+        }
+    }
+
+    private fun createSegmentChipDrawable(isSelected: Boolean, accentColor: Int): Drawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(4).toFloat()
+            if (isSelected) {
+                setColor(0xFF141923.toInt())
+                setStroke(dp(1), accentColor)
+            } else {
+                setColor(0xFF181C26.toInt())
+                setStroke(dp(1), COLOR_DARK_BORDER)
+            }
+        }
+    }
+
+    private fun createTabButtonDrawable(isSelected: Boolean, accentColor: Int): Drawable {
+        return if (isSelected) {
+            val base = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(4).toFloat()
+                setColor(0xFF1A202C.toInt())
+                setStroke(dp(1), accentColor)
+            }
+            val line = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(accentColor)
+            }
+            val ld = LayerDrawable(arrayOf(base, line))
+            ld.setLayerGravity(1, Gravity.BOTTOM or Gravity.FILL_HORIZONTAL)
+            ld.setLayerHeight(1, dp(2))
+            ld
+        } else {
+            GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(4).toFloat()
+                setColor(0xFF12151C.toInt())
+                setStroke(dp(1), COLOR_DARK_BORDER)
+            }
+        }
+    }
+
+    private fun createChassisDrawable(isRight: Boolean, accentColor: Int): Drawable {
+        val outerRadii = if (isRight) {
+            floatArrayOf(dp(8).toFloat(), dp(8).toFloat(), 0f, 0f, 0f, 0f, dp(8).toFloat(), dp(8).toFloat())
+        } else {
+            floatArrayOf(0f, 0f, dp(8).toFloat(), dp(8).toFloat(), dp(8).toFloat(), dp(8).toFloat(), 0f, 0f)
+        }
+
+        val outerBorder = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadii = outerRadii
+            setColor(0xFF090A0D.toInt())
+            setStroke(dp(1), accentColor)
+        }
+
+        val accentLip = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(1).toFloat()
+            setColor(accentColor)
+        }
+
+        val ld = LayerDrawable(arrayOf(outerBorder, accentLip))
+        val lipGravity = if (isRight) (Gravity.LEFT or Gravity.CENTER_VERTICAL) else (Gravity.RIGHT or Gravity.CENTER_VERTICAL)
+        ld.setLayerGravity(1, lipGravity)
+        ld.setLayerSize(1, dp(2), dp(40))
+        if (isRight) {
+            ld.setLayerInsetLeft(1, dp(1))
+        } else {
+            ld.setLayerInsetRight(1, dp(1))
+        }
+        return ld
+    }
+
+    private fun createCollapsedHandleDrawable(isRight: Boolean, accentColor: Int, isSpeaking: Boolean): Drawable {
+        val radii = if (isRight) {
+            floatArrayOf(dp(10).toFloat(), dp(10).toFloat(), 0f, 0f, 0f, 0f, dp(10).toFloat(), dp(10).toFloat())
+        } else {
+            floatArrayOf(0f, 0f, dp(10).toFloat(), dp(10).toFloat(), dp(10).toFloat(), dp(10).toFloat(), 0f, 0f)
+        }
+
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadii = radii
+            setColor(0xFF090A0D.toInt())
+            if (isSpeaking && isVoiceBlinkEnabled) {
+                setStroke(dp(2), accentColor)
+            } else {
+                setStroke(dp(1), 0xFF3A4358.toInt())
+            }
+        }
+    }
+
+    private fun createLedDrawable(color: Int): Drawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(1).toFloat()
+            setColor(color)
+        }
+    }
+
+    private fun createHudPillDrawable(accentColor: Int): Drawable {
+        return GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(18).toFloat()
+            setColor(0xFF090A0D.toInt())
+            setStroke(dp(1), accentColor)
+        }
+    }
+
+    private fun createRosterRowDrawable(isSpeaker: Boolean, accentColor: Int): Drawable {
+        return if (isSpeaker) {
+            val base = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(4).toFloat()
+                setColor(0xFF11141B.toInt())
+                setStroke(dp(1), accentColor)
+            }
+            val rail = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                setColor(accentColor)
+                cornerRadii = floatArrayOf(dp(4).toFloat(), dp(4).toFloat(), 0f, 0f, 0f, 0f, dp(4).toFloat(), dp(4).toFloat())
+            }
+            val ld = LayerDrawable(arrayOf(base, rail))
+            ld.setLayerGravity(1, Gravity.LEFT or Gravity.FILL_VERTICAL)
+            ld.setLayerWidth(1, dp(3))
+            ld
+        } else {
+            GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(4).toFloat()
+                setColor(0xFF11141B.toInt())
+                setStroke(dp(1), COLOR_DARK_BORDER)
+            }
+        }
+    }
+
+    private fun createKeycapDrawable(active: Boolean, accent: Int): Drawable {
+        val base = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(4).toFloat()
+            setColor(0xFF181C26.toInt())
+            setStroke(dp(1), if (active) accent else COLOR_DARK_BORDER)
+        }
+        val topStrip = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = dp(1).toFloat()
+            setColor(accent)
+        }
+        val ld = LayerDrawable(arrayOf(base, topStrip))
+        ld.setLayerGravity(1, Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+        ld.setLayerSize(1, dp(20), dp(2))
+        ld.setLayerInsetTop(1, dp(1))
+        return ld
+    }
+
+    private fun updateTabButtonsUi(activeTabIndex: Int, accentColor: Int) {
+        val tabs = listOf(tabBtnRoster, tabBtnChannels, tabBtnSettings)
+        tabs.forEachIndexed { index, imgView ->
+            val isSelected = (index == activeTabIndex)
+            imgView.isSelected = isSelected
+            imgView.background = createTabButtonDrawable(isSelected, accentColor)
+            imgView.setColorFilter(if (isSelected) accentColor else COLOR_MUTED, PorterDuff.Mode.SRC_IN)
+        }
+    }
+
+    private fun updateActionButtonsTheme(accentColor: Int) {
+        if (isMicEnabled) {
+            btnToggleMic.background = createKeycapDrawable(active = true, accent = accentColor)
+            iconStateMic.setColorFilter(accentColor, PorterDuff.Mode.SRC_IN)
+            txtStateMic.setTextColor(accentColor)
+        } else {
+            btnToggleMic.background = createKeycapDrawable(active = false, accent = THEME_RED)
+            iconStateMic.setColorFilter(THEME_RED, PorterDuff.Mode.SRC_IN)
+            txtStateMic.setTextColor(THEME_RED)
+        }
+
+        if (isDeafened) {
+            btnToggleDeafen.background = createKeycapDrawable(active = false, accent = THEME_RED)
+            iconStateDeafen.setColorFilter(THEME_RED, PorterDuff.Mode.SRC_IN)
+            txtStateDeafen.setTextColor(THEME_RED)
+        } else {
+            btnToggleDeafen.background = createKeycapDrawable(active = false, accent = COLOR_MUTED)
+            iconStateDeafen.setColorFilter(COLOR_MUTED, PorterDuff.Mode.SRC_IN)
+            txtStateDeafen.setTextColor(COLOR_MUTED)
+        }
+
+        btnToggleRoute.background = createKeycapDrawable(active = isSpeakerphone, accent = if (isSpeakerphone) accentColor else COLOR_MUTED)
+        iconStateRoute.setColorFilter(if (isSpeakerphone) accentColor else COLOR_MUTED, PorterDuff.Mode.SRC_IN)
+        txtStateRoute.setTextColor(if (isSpeakerphone) accentColor else COLOR_MUTED)
+    }
+
+    private fun applyHandleSpeakingUi(speaking: Boolean) {
+        val shouldBlink = speaking && isVoiceBlinkEnabled
+        layoutCollapsed.isActivated = shouldBlink
+        edgeTabIndicator.isActivated = shouldBlink
+        layoutCollapsed.background = createCollapsedHandleDrawable(isDockedOnRight, currentAccentColor, shouldBlink)
+        edgeTabIndicator.background = createLedDrawable(if (shouldBlink) currentAccentColor else COLOR_DARK_ROW)
+    }
+
     private fun applyAccentColor(accentColor: Int) {
+        currentAccentColor = accentColor
+
+        // 1. Chassis & Edge Pill
+        layoutExpanded.background = createChassisDrawable(isDockedOnRight, accentColor)
+        layoutCollapsed.background = createCollapsedHandleDrawable(isDockedOnRight, accentColor, isSpeaking = false)
+        edgeTabIndicator.background = createLedDrawable(COLOR_DARK_ROW)
+
+        // 2. Navigation Tab Rail
+        updateTabButtonsUi(currentDeckTab, accentColor)
+
+        // 3. Header Telemetry & Status
         deckBitrateBadge.setTextColor(accentColor)
         deckActiveRoomTag.setTextColor(accentColor)
         if (deckPingReadout.text == "LIVE") {
             deckPingReadout.setTextColor(accentColor)
         }
-        tabBtnRoster.setColorFilter(if (tabBtnRoster.isSelected) accentColor else COLOR_MUTED, PorterDuff.Mode.SRC_IN)
-        tabBtnChannels.setColorFilter(if (tabBtnChannels.isSelected) accentColor else COLOR_MUTED, PorterDuff.Mode.SRC_IN)
-        tabBtnSettings.setColorFilter(if (tabBtnSettings.isSelected) accentColor else COLOR_MUTED, PorterDuff.Mode.SRC_IN)
+        deckPingReadout.background = createHudPillDrawable(accentColor)
+
+        // 4. Quick Actions
+        updateActionButtonsTheme(accentColor)
+
+        // 5. Settings Tab Elements
+        allSegmentItemUpdaters.forEach { it(accentColor) }
+
+        val sbOpacity = layoutExpanded.findViewById<SeekBar>(R.id.seekbar_chassis_opacity)
+        sbOpacity?.progressTintList = ColorStateList.valueOf(accentColor)
+        sbOpacity?.thumbTintList = ColorStateList.valueOf(accentColor)
+
+        val sbHue = layoutExpanded.findViewById<SeekBar>(R.id.seekbar_custom_hue)
+        sbHue?.thumbTintList = ColorStateList.valueOf(accentColor)
+
+        layoutExpanded.findViewById<View>(R.id.custom_color_preview)?.background = createSwatchDrawable(accentColor)
+        layoutExpanded.findViewById<EditText>(R.id.edit_custom_hex)?.setText(String.format("#%06X", (0xFFFFFF and accentColor)))
+
+        // 6. Roster Tab Elements
+        for (i in 0 until deckRosterContainer.childCount) {
+            val child = deckRosterContainer.getChildAt(i)
+            val rowTag = child.tag as? String ?: continue
+            if (rowTag.startsWith("ROW_")) {
+                val id = rowTag.removePrefix("ROW_")
+                val isSpeaker = child.isActivated
+                child.background = createRosterRowDrawable(isSpeaker, accentColor)
+                child.findViewWithTag<View>("LED_$id")?.background = createLedDrawable(if (isSpeaker) accentColor else COLOR_MUTED)
+
+                val sb = (child as? ViewGroup)?.let { vg ->
+                    (0 until vg.childCount).mapNotNull { vg.getChildAt(it) as? SeekBar }.firstOrNull()
+                }
+                sb?.progressTintList = ColorStateList.valueOf(accentColor)
+                sb?.thumbTintList = ColorStateList.valueOf(accentColor)
+
+                val pingBtn = child.findViewWithTag<TextView>("PING_$id")
+                pingBtn?.setTextColor(accentColor)
+
+                val gainReadout = child.findViewWithTag<TextView>("GAIN_$id")
+                val vol = participantVolumes[id] ?: 100
+                if (vol == 100 && gainReadout != null) {
+                    gainReadout.setTextColor(accentColor)
+                }
+            }
+        }
+
+        // 7. Channels Tab Elements
+        rebuildRecentChannelsList()
     }
 
     private fun applyChassisOpacity(opacity: Int) {
@@ -815,8 +1211,8 @@ class VoiceOverlayService : Service() {
             expandedLayout.addView(contentWrapper)
             expandedLayout.addView(rail)
 
-            layoutCollapsed.setBackgroundResource(R.drawable.bg_edge_tab_right)
-            layoutExpanded.setBackgroundResource(R.drawable.bg_hud_chassis_right)
+            layoutCollapsed.background = createCollapsedHandleDrawable(isRight = true, accentColor = currentAccentColor, isSpeaking = false)
+            layoutExpanded.background = createChassisDrawable(isRight = true, accentColor = currentAccentColor)
             if (layoutCollapsed.visibility == View.VISIBLE) {
                 params.x = maxOf(0, metrics.widthPixels - handleWidth)
             } else {
@@ -830,8 +1226,8 @@ class VoiceOverlayService : Service() {
             expandedLayout.addView(rail)
             expandedLayout.addView(contentWrapper)
 
-            layoutCollapsed.setBackgroundResource(R.drawable.bg_edge_tab_left)
-            layoutExpanded.setBackgroundResource(R.drawable.bg_hud_chassis_left)
+            layoutCollapsed.background = createCollapsedHandleDrawable(isRight = false, accentColor = currentAccentColor, isSpeaking = false)
+            layoutExpanded.background = createChassisDrawable(isRight = false, accentColor = currentAccentColor)
             params.x = 0
             deckBtnCollapse.rotation = 0f
         }
@@ -1157,14 +1553,9 @@ class VoiceOverlayService : Service() {
     private fun selectDeckTab(tabIndex: Int) {
         vibrateClick()
         resetAutoCollapseTimer()
+        currentDeckTab = tabIndex
 
-        tabBtnRoster.isSelected = (tabIndex == 0)
-        tabBtnChannels.isSelected = (tabIndex == 1)
-        tabBtnSettings.isSelected = (tabIndex == 2)
-
-        tabBtnRoster.setColorFilter(if (tabIndex == 0) currentAccentColor else COLOR_MUTED, PorterDuff.Mode.SRC_IN)
-        tabBtnChannels.setColorFilter(if (tabIndex == 1) currentAccentColor else COLOR_MUTED, PorterDuff.Mode.SRC_IN)
-        tabBtnSettings.setColorFilter(if (tabIndex == 2) currentAccentColor else COLOR_MUTED, PorterDuff.Mode.SRC_IN)
+        updateTabButtonsUi(tabIndex, currentAccentColor)
 
         deckTabContentRoster.visibility = if (tabIndex == 0) View.VISIBLE else View.GONE
         deckTabContentChannels.visibility = if (tabIndex == 1) View.VISIBLE else View.GONE
@@ -1239,7 +1630,7 @@ class VoiceOverlayService : Service() {
                 ).apply { bottomMargin = dp(4) }
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setBackgroundResource(if (isCurrent) R.drawable.bg_roster_row else R.drawable.bg_chip_channel)
+                background = if (isCurrent) createRosterRowDrawable(true, currentAccentColor) else createSegmentChipDrawable(false, currentAccentColor)
                 setPadding(dp(10), dp(4), dp(8), dp(4))
                 isClickable = true
                 isFocusable = false
@@ -1319,7 +1710,7 @@ class VoiceOverlayService : Service() {
 
         mainHandler.postDelayed({
             btn.text = "PING"
-            btn.setTextColor(THEME_AMBER)
+            btn.setTextColor(currentAccentColor)
         }, 1500)
 
         serviceScope.launch(Dispatchers.IO) {
@@ -1444,7 +1835,7 @@ class VoiceOverlayService : Service() {
             txtStateMic.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
         }.start()
 
-        edgeTabIndicator.isActivated = isMicEnabled
+        updateActionButtonsTheme(currentAccentColor)
     }
 
     private fun updateDeafenUi() {
@@ -1456,6 +1847,8 @@ class VoiceOverlayService : Service() {
         txtStateDeafen.animate().scaleX(1.18f).scaleY(1.18f).setDuration(80).withEndAction {
             txtStateDeafen.animate().scaleX(1f).scaleY(1f).setDuration(120).start()
         }.start()
+
+        updateActionButtonsTheme(currentAccentColor)
     }
 
     private fun rebuildSquadList() {
@@ -1490,7 +1883,7 @@ class VoiceOverlayService : Service() {
                     LinearLayout.LayoutParams.WRAP_CONTENT
                 ).apply { bottomMargin = dp(4) }
                 orientation = LinearLayout.VERTICAL
-                setBackgroundResource(R.drawable.bg_roster_row)
+                background = createRosterRowDrawable(false, currentAccentColor)
                 setPadding(dp(10), dp(6), dp(8), dp(6))
                 tag = "ROW_$identity"
             }
@@ -1503,7 +1896,7 @@ class VoiceOverlayService : Service() {
             val led = View(this).apply {
                 tag = "LED_$identity"
                 layoutParams = LinearLayout.LayoutParams(dp(6), dp(6))
-                setBackgroundResource(R.drawable.indicator_voice_led)
+                background = createLedDrawable(COLOR_MUTED)
             }
 
             val callsignTxt = TextView(this).apply {
@@ -1519,13 +1912,14 @@ class VoiceOverlayService : Service() {
             }
 
             val pingBtn = TextView(this).apply {
+                tag = "PING_$identity"
                 text = "PING"
-                setTextColor(THEME_AMBER)
+                setTextColor(currentAccentColor)
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 9f)
                 typeface = Typeface.MONOSPACE
                 paint.isFakeBoldText = true
                 gravity = Gravity.CENTER
-                setBackgroundResource(R.drawable.bg_tactile_ping)
+                background = createSegmentChipDrawable(false, currentAccentColor)
                 setPadding(dp(6), dp(2), dp(6), dp(2))
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -1557,6 +1951,8 @@ class VoiceOverlayService : Service() {
                 progress = savedVol
                 progressDrawable = getDrawable(R.drawable.seekbar_gain_track)
                 thumb = getDrawable(R.drawable.seekbar_gain_thumb)
+                progressTintList = ColorStateList.valueOf(currentAccentColor)
+                thumbTintList = ColorStateList.valueOf(currentAccentColor)
                 splitTrack = false
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1646,8 +2042,8 @@ class VoiceOverlayService : Service() {
         val isAnyoneTalking = activeIds.isNotEmpty()
 
         // Edge slider tab live speaking state
-        layoutCollapsed.isActivated = isAnyoneTalking
-        edgeTabIndicator.isActivated = isAnyoneTalking
+        val shouldBlink = isVoiceBlinkEnabled && isAnyoneTalking
+        applyHandleSpeakingUi(shouldBlink)
         if (isAnyoneTalking) {
             resetGhostFadeTimer()
         }
@@ -1660,8 +2056,10 @@ class VoiceOverlayService : Service() {
                 val id = rowTag.removePrefix("ROW_")
                 val isSpeaker = activeIds.contains(id)
                 child.isActivated = isSpeaker
+                child.background = createRosterRowDrawable(isSpeaker, currentAccentColor)
                 val led = child.findViewWithTag<View>("LED_$id")
                 led?.isActivated = isSpeaker
+                led?.background = createLedDrawable(if (isSpeaker) currentAccentColor else COLOR_MUTED)
             }
         }
 

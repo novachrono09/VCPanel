@@ -33,9 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v2.1.0 --yes || true
-          git tag -d v2.1.0 || true
-          git push origin :refs/tags/v2.1.0 || true
-          gh release create v2.1.0 app/build/outputs/apk/release/*.apk \
-            --title "VOX v2.1.0 (Dynamic Column Navigation Rail & Top-Tier 5-Pillar Customization Suite)" \
-            --notes "VOX v2.1.0 Major Customization Release: Dynamic vertical icon-only tab rail that flips to left/right border to match edge docking side, new full-featured Settings tab with all 5 customization pillars (6 tactical accent swatches, chassis opacity slider, deck scaling, ghost idle fade, handle width/height, docking lock, audio bitrate presets, chime modes, haptic strength, ping alert filters, auto-collapse timers, and swipe sensitivity)."
+          gh release delete v2.2.0 --yes || true
+          git tag -d v2.2.0 || true
+          git push origin :refs/tags/v2.2.0 || true
+          gh release create v2.2.0 app/build/outputs/apk/release/*.apk \
+            --title "VOX v2.2.0 (Full-Panel Theming Overhaul, Custom Color Picker & Handle Voice Blink Toggle)" \
+            --notes "VOX v2.2.0 Major Update: Complete full-panel dynamic theming engine (chassis border and lip, tab buttons and indicators, header telemetry, action keycaps, roster speaking borders and telemetry rails, gain seekbars, ping buttons, and all settings buttons), 360-degree rainbow spectrum Hue slider + custom Hex entry color picker, and Speaking Blink Indicator toggle for the edge slider pill."

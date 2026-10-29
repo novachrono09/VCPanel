@@ -31,13 +31,14 @@
     </item>
     <!-- Right Grip Telemetry Accent (Inner Edge Lip) -->
     <item
+        android:id="@+id/chassis_accent_lip"
         android:gravity="right|center_vertical"
         android:right="1dp">
         <shape android:shape="rectangle">
             <size
                 android:width="2dp"
                 android:height="40dp" />
-            <solid android:color="#FF5500" />
+            <solid android:color="#FFFFFF" />
             <corners android:radius="1dp" />
         </shape>
     </item>
