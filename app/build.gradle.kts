@@ -11,8 +11,8 @@ android {
         applicationId = "com.squad.tacticalvoice"
         minSdk = 26
         targetSdk = 34
-        versionCode = 10
-        versionName = "1.9.1"
+        versionCode = 11
+        versionName = "2.0.0"
 
         // Bundle ARM64 and ARMv7 (32-bit) native C++ libraries for universal compatibility
         // Prevents UnsatisfiedLinkError crashes on budget/low-RAM 32-bit Android phones

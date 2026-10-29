@@ -33,9 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v1.9.1 --yes || true
-          git tag -d v1.9.1 || true
-          git push origin :refs/tags/v1.9.1 || true
-          gh release create v1.9.1 app/build/outputs/apk/release/*.apk \
-            --title "VOX v1.9.1 (Battery & Low-RAM Optimization: 32kbps Opus, Memory Leak Fix & Universal 32/64-bit)" \
-            --notes "VOX v1.9.1 Critical Stability & Battery Update: 75% reduction in radio battery draw (32kbps Opus wideband + DTX silence suppression), fixed leaked animators in global AnimationHandler, removed dual hardware-accelerated EGL surfaces on low-RAM GPUs, added 32-bit armeabi-v7a support for budget Android phones, enabled largeHeap, and added speech hangover debouncing to prevent syllable animation thrashing."
+          gh release delete v2.0.0 --yes || true
+          git tag -d v2.0.0 || true
+          git push origin :refs/tags/v2.0.0 || true
+          gh release create v2.0.0 app/build/outputs/apk/release/*.apk \
+            --title "VOX v2.0.0 (Zero-Load Engine: 24k Opus, Zero Dots/PTT Bloat, Screen-Off Sleep & 32-bit Compatibility)" \
+            --notes "VOX v2.0.0 Major Performance Architecture Milestone: Completely stripped dots and PTT overhead, consolidated to 1 single lightweight hardware window, reduced audio to 24kbps Opus wideband with DTX silence suppression, registered ACTION_SCREEN_OFF power gating to halt all frame loops when screen is dark, eliminated runtime color and view allocations, bundled universal arm64-v8a + armeabi-v7a native libraries, and enabled largeHeap."
