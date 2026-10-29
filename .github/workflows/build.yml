@@ -33,9 +33,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release delete v2.0.0 --yes || true
-          git tag -d v2.0.0 || true
-          git push origin :refs/tags/v2.0.0 || true
-          gh release create v2.0.0 app/build/outputs/apk/release/*.apk \
-            --title "VOX v2.0.0 (Zero-Load Engine: 24k Opus, Zero Dots/PTT Bloat, Screen-Off Sleep & 32-bit Compatibility)" \
-            --notes "VOX v2.0.0 Major Performance Architecture Milestone: Completely stripped dots and PTT overhead, consolidated to 1 single lightweight hardware window, reduced audio to 24kbps Opus wideband with DTX silence suppression, registered ACTION_SCREEN_OFF power gating to halt all frame loops when screen is dark, eliminated runtime color and view allocations, bundled universal arm64-v8a + armeabi-v7a native libraries, and enabled largeHeap."
+          gh release delete v2.1.0 --yes || true
+          git tag -d v2.1.0 || true
+          git push origin :refs/tags/v2.1.0 || true
+          gh release create v2.1.0 app/build/outputs/apk/release/*.apk \
+            --title "VOX v2.1.0 (Dynamic Column Navigation Rail & Top-Tier 5-Pillar Customization Suite)" \
+            --notes "VOX v2.1.0 Major Customization Release: Dynamic vertical icon-only tab rail that flips to left/right border to match edge docking side, new full-featured Settings tab with all 5 customization pillars (6 tactical accent swatches, chassis opacity slider, deck scaling, ghost idle fade, handle width/height, docking lock, audio bitrate presets, chime modes, haptic strength, ping alert filters, auto-collapse timers, and swipe sensitivity)."

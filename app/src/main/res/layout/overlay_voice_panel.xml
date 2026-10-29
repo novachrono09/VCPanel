@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/hud_root_container"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content">
+    android:layout_height="wrap_content"
+    android:clipChildren="false"
+    android:clipToPadding="false">
 
     <!-- ================================================================== -->
-    <!-- MODE A: EDGE SLIDER HANDLE (Slim Edge Tab Docked to Mobile Border) -->
+    <!-- MODE A: EDGE SLIDER TAB (Slim Tactile Pill Docked on Mobile Edge)   -->
     <!-- ================================================================== -->
     <FrameLayout
         android:id="@+id/layout_hud_collapsed"
@@ -16,522 +17,1318 @@
         android:focusable="false"
         android:visibility="visible">
 
-        <!-- Center Tactile Grip / Active Voice LED Strip -->
+        <!-- Active Voice Glow Pill (Glows vibrant neon when transmitting/receiving) -->
         <View
             android:id="@+id/edge_tab_indicator"
             android:layout_width="3dp"
-            android:layout_height="28dp"
+            android:layout_height="24dp"
             android:layout_gravity="center"
             android:background="@drawable/indicator_voice_led" />
     </FrameLayout>
 
     <!-- ================================================================== -->
-    <!-- MODE B: EXPANDED CONTROL DECK (272dp Tactical Command Module)      -->
+    <!-- MODE B: EXPANDED CONTROL DECK (Tactical Command Module with Rail)  -->
     <!-- ================================================================== -->
     <LinearLayout
         android:id="@+id/layout_hud_expanded"
-        android:layout_width="272dp"
+        android:layout_width="286dp"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_hud_chassis_left"
-        android:orientation="vertical"
-        android:padding="10dp"
+        android:orientation="horizontal"
+        android:padding="8dp"
         android:visibility="gone">
 
-        <!-- 1. HEADER BAR: Drag Handle, Channel ID, Dots Toggle, Mode Switch, Collapse -->
+        <!-- VERTICAL TAB RAIL COLUMN (ICON-ONLY TABS) -->
         <LinearLayout
-            android:id="@+id/deck_header_drag_zone"
-            android:layout_width="match_parent"
-            android:layout_height="28dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal">
-
-            <!-- Tactile Grip Matrix -->
-            <LinearLayout
-                android:id="@+id/deck_drag_handle"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:paddingLeft="2dp"
-                android:paddingRight="6dp">
-
-                <View
-                    android:layout_width="3dp"
-                    android:layout_height="14dp"
-                    android:background="#464E62" />
-
-                <View
-                    android:layout_width="3dp"
-                    android:layout_height="14dp"
-                    android:layout_marginLeft="2dp"
-                    android:background="#464E62" />
-            </LinearLayout>
-
-            <!-- Room / Channel Title -->
-            <TextView
-                android:id="@+id/deck_channel_title"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:ellipsize="end"
-                android:fontFamily="monospace"
-                android:includeFontPadding="false"
-                android:singleLine="true"
-                android:text="CH // SQUAD-1"
-                android:textColor="#F0F4F8"
-                android:textSize="11sp"
-                android:textStyle="bold" />
-
-            <!-- Audio Mode & Telemetry Badge -->
-            <TextView
-                android:id="@+id/deck_bitrate_badge"
-                android:layout_width="wrap_content"
-                android:layout_height="20dp"
-                android:layout_marginRight="4dp"
-                android:background="@drawable/bg_badge_telemetry"
-                android:clickable="false"
-                android:focusable="false"
-                android:fontFamily="monospace"
-                android:gravity="center"
-                android:includeFontPadding="false"
-                android:paddingLeft="6dp"
-                android:paddingRight="6dp"
-                android:text="VOX // 24K"
-                android:textColor="#00F58A"
-                android:textSize="9sp"
-                android:textStyle="bold" />
-
-            <!-- Collapse Trigger Button with Dynamic Directional Chevron -->
-            <ImageView
-                android:id="@+id/deck_btn_collapse"
-                android:layout_width="24dp"
-                android:layout_height="22dp"
-                android:background="@drawable/bg_chip_channel"
-                android:clickable="true"
-                android:focusable="false"
-                android:padding="3dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/ic_chevron_collapse" />
-        </LinearLayout>
-
-        <!-- Structural Hairline Divider -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:layout_marginTop="6dp"
-            android:layout_marginBottom="8dp"
-            android:background="#262C3A" />
-
-        <!-- 2. QUICK ACTION GRID (4 Tactile Keycaps with Modern Vector Icons) -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="44dp"
-            android:orientation="horizontal"
-            android:weightSum="4">
-
-            <!-- Action 1: Mic Toggle / PTT Keycap -->
-            <LinearLayout
-                android:id="@+id/btn_toggle_mic"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginRight="4dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_tactile_toggle"
-                android:clickable="true"
-                android:focusable="false"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:paddingTop="3dp"
-                android:paddingBottom="2dp">
-
-                <ImageView
-                    android:id="@+id/icon_state_mic"
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:scaleType="fitCenter"
-                    android:src="@drawable/ic_mic_on" />
-
-                <TextView
-                    android:id="@+id/txt_state_mic"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:fontFamily="monospace"
-                    android:includeFontPadding="false"
-                    android:text="LIVE"
-                    android:textColor="#00F58A"
-                    android:textSize="8sp" />
-            </LinearLayout>
-
-            <!-- Action 2: Deafen Toggle Keycap -->
-            <LinearLayout
-                android:id="@+id/btn_toggle_deafen"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginRight="4dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_tactile_toggle"
-                android:clickable="true"
-                android:focusable="false"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:paddingTop="3dp"
-                android:paddingBottom="2dp">
-
-                <ImageView
-                    android:id="@+id/icon_state_deafen"
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:scaleType="fitCenter"
-                    android:src="@drawable/ic_headset" />
-
-                <TextView
-                    android:id="@+id/txt_state_deafen"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:fontFamily="monospace"
-                    android:includeFontPadding="false"
-                    android:text="NORM"
-                    android:textColor="#7C869B"
-                    android:textSize="8sp" />
-            </LinearLayout>
-
-            <!-- Action 3: Audio Route Toggle Keycap -->
-            <LinearLayout
-                android:id="@+id/btn_toggle_route"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginRight="4dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_tactile_toggle"
-                android:clickable="true"
-                android:focusable="false"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:paddingTop="3dp"
-                android:paddingBottom="2dp">
-
-                <ImageView
-                    android:id="@+id/icon_state_route"
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:scaleType="fitCenter"
-                    android:src="@drawable/ic_speaker" />
-
-                <TextView
-                    android:id="@+id/txt_state_route"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:fontFamily="monospace"
-                    android:includeFontPadding="false"
-                    android:text="SPKR"
-                    android:textColor="#00F58A"
-                    android:textSize="8sp" />
-            </LinearLayout>
-
-            <!-- Action 4: Disconnect Keycap -->
-            <LinearLayout
-                android:id="@+id/btn_disconnect"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1"
-                android:background="@drawable/bg_tactile_danger"
-                android:clickable="true"
-                android:focusable="false"
-                android:gravity="center"
-                android:orientation="vertical"
-                android:paddingTop="3dp"
-                android:paddingBottom="2dp">
-
-                <ImageView
-                    android:layout_width="16dp"
-                    android:layout_height="16dp"
-                    android:scaleType="fitCenter"
-                    android:src="@drawable/ic_power_exit" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:fontFamily="monospace"
-                    android:includeFontPadding="false"
-                    android:text="EXIT"
-                    android:textColor="#FF2A4B"
-                    android:textSize="8sp" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- 3. DUAL-TAB NAVIGATION (ROSTER vs CHANNELS WITH VECTOR ICONS) -->
-        <LinearLayout
-            android:id="@+id/deck_tab_bar"
-            android:layout_width="match_parent"
-            android:layout_height="28dp"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal"
-            android:weightSum="2">
-
-            <!-- Tab 1: Roster -->
-            <TextView
-                android:id="@+id/tab_btn_roster"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginRight="3dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_tab_button"
-                android:clickable="true"
-                android:drawableLeft="@drawable/ic_group_roster"
-                android:drawablePadding="5dp"
-                android:focusable="false"
-                android:fontFamily="sans-serif-medium"
-                android:gravity="center"
-                android:includeFontPadding="false"
-                android:letterSpacing="0.06"
-                android:paddingLeft="10dp"
-                android:paddingRight="10dp"
-                android:text="ROSTER"
-                android:textColor="#FF5500"
-                android:textSize="10sp"
-                android:textStyle="bold" />
-
-            <!-- Tab 2: Channels -->
-            <TextView
-                android:id="@+id/tab_btn_channels"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_marginLeft="3dp"
-                android:layout_weight="1"
-                android:background="@drawable/bg_tab_button"
-                android:clickable="true"
-                android:drawableLeft="@drawable/ic_radio_channels"
-                android:drawablePadding="5dp"
-                android:focusable="false"
-                android:fontFamily="sans-serif-medium"
-                android:gravity="center"
-                android:includeFontPadding="false"
-                android:letterSpacing="0.06"
-                android:paddingLeft="10dp"
-                android:paddingRight="10dp"
-                android:text="CHANNELS"
-                android:textColor="#7C869B"
-                android:textSize="10sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-
-        <!-- TAB CONTENT 1: SQUAD ROSTER & GAIN TELEMETRY -->
-        <LinearLayout
-            android:id="@+id/deck_tab_content_roster"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:id="@+id/tab_rail_column"
+            android:layout_width="34dp"
+            android:layout_height="match_parent"
+            android:gravity="top|center_horizontal"
             android:orientation="vertical"
-            android:visibility="visible">
+            android:paddingTop="2dp">
 
+            <!-- Tab 1: Squad Roster Icon -->
+            <ImageView
+                android:id="@+id/tab_btn_roster"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_tab_button"
+                android:clickable="true"
+                android:focusable="false"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_group_roster" />
+
+            <!-- Tab 2: Radio Channels Icon -->
+            <ImageView
+                android:id="@+id/tab_btn_channels"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:layout_marginBottom="8dp"
+                android:background="@drawable/bg_tab_button"
+                android:clickable="true"
+                android:focusable="false"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_radio_channels" />
+
+            <!-- Tab 3: Settings & Customization Icon -->
+            <ImageView
+                android:id="@+id/tab_btn_settings"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                android:background="@drawable/bg_tab_button"
+                android:clickable="true"
+                android:focusable="false"
+                android:padding="6dp"
+                android:scaleType="centerInside"
+                android:src="@drawable/ic_tab_settings" />
+        </LinearLayout>
+
+        <!-- MAIN DECK CONTENT WRAPPER -->
+        <LinearLayout
+            android:id="@+id/deck_content_wrapper"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="6dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <!-- 1. HEADER BAR: Drag Handle, Channel ID, Telemetry Badge, Collapse -->
             <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="4dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:fontFamily="sans-serif-medium"
-                    android:includeFontPadding="false"
-                    android:letterSpacing="0.1"
-                    android:text="SQUAD TELEMETRY"
-                    android:textColor="#7C869B"
-                    android:textSize="9sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="monospace"
-                    android:includeFontPadding="false"
-                    android:text="GAIN 0-200%"
-                    android:textColor="#464E62"
-                    android:textSize="9sp" />
-            </LinearLayout>
-
-            <!-- Dynamic Roster Container -->
-            <LinearLayout
-                android:id="@+id/deck_roster_container"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical" />
-
-            <!-- Roster Footer: 1-Tap Copy Invite & Ping Telemetry -->
-            <LinearLayout
+                android:id="@+id/deck_header_drag_zone"
                 android:layout_width="match_parent"
                 android:layout_height="28dp"
-                android:layout_marginTop="8dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/deck_btn_copy_invite"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_marginRight="6dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_chip_channel"
-                    android:clickable="true"
-                    android:drawableLeft="@drawable/ic_copy_clipboard"
-                    android:drawablePadding="6dp"
-                    android:focusable="false"
-                    android:fontFamily="monospace"
-                    android:gravity="center_vertical|center_horizontal"
-                    android:includeFontPadding="false"
-                    android:paddingLeft="8dp"
-                    android:paddingRight="8dp"
-                    android:text="COPY LINK"
-                    android:textColor="#F0F4F8"
-                    android:textSize="10sp"
-                    android:textStyle="bold" />
-
-                <!-- Live RTT Ping Telemetry Box -->
-                <TextView
-                    android:id="@+id/deck_ping_readout"
+                <!-- Tactile Grip Matrix -->
+                <LinearLayout
+                    android:id="@+id/deck_drag_handle"
                     android:layout_width="wrap_content"
                     android:layout_height="match_parent"
-                    android:background="@drawable/bg_badge_telemetry"
-                    android:fontFamily="monospace"
-                    android:gravity="center"
-                    android:includeFontPadding="false"
-                    android:paddingLeft="8dp"
-                    android:paddingRight="8dp"
-                    android:text="LIVE"
-                    android:textColor="#00F58A"
-                    android:textSize="10sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-        </LinearLayout>
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingLeft="2dp"
+                    android:paddingRight="6dp">
 
-        <!-- TAB CONTENT 2: CHANNELS & DIRECT FREQUENCY HOP -->
-        <LinearLayout
-            android:id="@+id/deck_tab_content_channels"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone">
+                    <View
+                        android:layout_width="3dp"
+                        android:layout_height="14dp"
+                        android:background="#464E62" />
 
-            <!-- Subheader: Switch Frequency -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="4dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
+                    <View
+                        android:layout_width="3dp"
+                        android:layout_height="14dp"
+                        android:layout_marginLeft="2dp"
+                        android:background="#464E62" />
+                </LinearLayout>
 
+                <!-- Room / Channel Title -->
                 <TextView
+                    android:id="@+id/deck_channel_title"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:fontFamily="sans-serif-medium"
-                    android:includeFontPadding="false"
-                    android:letterSpacing="0.1"
-                    android:text="SWITCH FREQUENCY BY CODE"
-                    android:textColor="#7C869B"
-                    android:textSize="9sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/deck_active_room_tag"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
                     android:fontFamily="monospace"
                     android:includeFontPadding="false"
-                    android:text="#SQ-884"
-                    android:textColor="#00F58A"
-                    android:textSize="9sp"
-                    android:textStyle="bold" />
-            </LinearLayout>
-
-            <!-- Direct Code Input Row -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="34dp"
-                android:gravity="center_vertical"
-                android:orientation="horizontal">
-
-                <EditText
-                    android:id="@+id/input_overlay_room_code"
-                    android:layout_width="0dp"
-                    android:layout_height="match_parent"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_input_field"
-                    android:fontFamily="monospace"
-                    android:hint="ENTER ROOM CODE"
-                    android:imeOptions="actionDone"
-                    android:inputType="textCapCharacters|textNoSuggestions"
-                    android:paddingLeft="8dp"
-                    android:paddingRight="8dp"
                     android:singleLine="true"
+                    android:text="CH // SQUAD-1"
                     android:textColor="#F0F4F8"
-                    android:textColorHint="#464E62"
                     android:textSize="11sp"
                     android:textStyle="bold" />
 
-                <!-- Randomize Button with Vector Dice Icon -->
-                <ImageView
-                    android:id="@+id/btn_overlay_rand_code"
-                    android:layout_width="38dp"
-                    android:layout_height="match_parent"
-                    android:layout_marginLeft="4dp"
-                    android:background="@drawable/bg_chip_channel"
-                    android:clickable="true"
-                    android:focusable="false"
-                    android:padding="8dp"
-                    android:scaleType="centerInside"
-                    android:src="@drawable/ic_dice_random" />
-
-                <!-- Hop/Switch Button with Forward Arrow Icon -->
+                <!-- Audio Mode & Telemetry Badge -->
                 <TextView
-                    android:id="@+id/btn_overlay_join_code"
-                    android:layout_width="56dp"
-                    android:layout_height="match_parent"
-                    android:layout_marginLeft="4dp"
-                    android:background="@drawable/bg_btn_deploy"
-                    android:clickable="true"
-                    android:drawableLeft="@drawable/ic_arrow_join"
-                    android:drawablePadding="2dp"
+                    android:id="@+id/deck_bitrate_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="20dp"
+                    android:layout_marginRight="4dp"
+                    android:background="@drawable/bg_badge_telemetry"
+                    android:clickable="false"
                     android:focusable="false"
                     android:fontFamily="monospace"
                     android:gravity="center"
                     android:includeFontPadding="false"
                     android:paddingLeft="6dp"
                     android:paddingRight="6dp"
-                    android:text="HOP"
-                    android:textColor="#0B0D13"
-                    android:textSize="10sp"
+                    android:text="VOX // 24K"
+                    android:textColor="#00F58A"
+                    android:textSize="9sp"
                     android:textStyle="bold" />
+
+                <!-- Collapse Trigger Button with Dynamic Directional Chevron -->
+                <ImageView
+                    android:id="@+id/deck_btn_collapse"
+                    android:layout_width="24dp"
+                    android:layout_height="22dp"
+                    android:background="@drawable/bg_chip_channel"
+                    android:clickable="true"
+                    android:focusable="false"
+                    android:padding="3dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_chevron_collapse" />
             </LinearLayout>
 
-            <!-- Subheader: Recent Frequencies -->
-            <TextView
+            <!-- Structural Hairline Divider -->
+            <View
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:layout_marginBottom="4dp"
-                android:fontFamily="sans-serif-medium"
-                android:includeFontPadding="false"
-                android:letterSpacing="0.1"
-                android:text="RECENT FREQUENCIES (TAP TO HOP)"
-                android:textColor="#7C869B"
-                android:textSize="9sp"
-                android:textStyle="bold" />
+                android:layout_height="1dp"
+                android:layout_marginTop="5dp"
+                android:layout_marginBottom="7dp"
+                android:background="#1C212D" />
 
-            <!-- Dynamic Recent Channels Container -->
+            <!-- 2. QUICK ACTION GRID (4 Tactile Keycaps with Modern Vector Icons) -->
             <LinearLayout
-                android:id="@+id/deck_recent_channels_container"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:orientation="horizontal"
+                android:weightSum="4">
+
+                <!-- Action 1: Mic Toggle Keycap -->
+                <LinearLayout
+                    android:id="@+id/btn_toggle_mic"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginRight="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_tactile_toggle"
+                    android:clickable="true"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingTop="3dp"
+                    android:paddingBottom="3dp">
+
+                    <ImageView
+                        android:id="@+id/icon_state_mic"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/ic_mic_on" />
+
+                    <TextView
+                        android:id="@+id/txt_state_mic"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="LIVE"
+                        android:textColor="#00F58A"
+                        android:textSize="8sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- Action 2: Deafen Toggle Keycap -->
+                <LinearLayout
+                    android:id="@+id/btn_toggle_deafen"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginRight="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_tactile_toggle"
+                    android:clickable="true"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingTop="3dp"
+                    android:paddingBottom="3dp">
+
+                    <ImageView
+                        android:id="@+id/icon_state_deafen"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/ic_headset" />
+
+                    <TextView
+                        android:id="@+id/txt_state_deafen"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="NORM"
+                        android:textColor="#7C869B"
+                        android:textSize="8sp" />
+                </LinearLayout>
+
+                <!-- Action 3: Route Toggle Keycap -->
+                <LinearLayout
+                    android:id="@+id/btn_toggle_route"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginRight="4dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_tactile_toggle"
+                    android:clickable="true"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingTop="3dp"
+                    android:paddingBottom="3dp">
+
+                    <ImageView
+                        android:id="@+id/icon_state_route"
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/ic_speaker" />
+
+                    <TextView
+                        android:id="@+id/txt_state_route"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="SPKR"
+                        android:textColor="#00F58A"
+                        android:textSize="8sp" />
+                </LinearLayout>
+
+                <!-- Action 4: Disconnect Keycap -->
+                <LinearLayout
+                    android:id="@+id/btn_disconnect"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_tactile_danger"
+                    android:clickable="true"
+                    android:focusable="false"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:paddingTop="3dp"
+                    android:paddingBottom="3dp">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/ic_power_exit" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="2dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="EXIT"
+                        android:textColor="#FF2A4B"
+                        android:textSize="8sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- TAB CONTENT 1: SQUAD ROSTER & GAIN TELEMETRY -->
+            <LinearLayout
+                android:id="@+id/deck_tab_content_roster"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="vertical" />
+                android:orientation="vertical"
+                android:visibility="visible">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="4dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:fontFamily="sans-serif-medium"
+                        android:includeFontPadding="false"
+                        android:letterSpacing="0.1"
+                        android:text="SQUAD TELEMETRY"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="GAIN 0-200%"
+                        android:textColor="#464E62"
+                        android:textSize="9sp" />
+                </LinearLayout>
+
+                <!-- Dynamic Roster Container -->
+                <LinearLayout
+                    android:id="@+id/deck_roster_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+
+                <!-- Roster Footer: 1-Tap Copy Invite & Ping Telemetry -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="28dp"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:id="@+id/deck_btn_copy_invite"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginRight="6dp"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_chip_channel"
+                        android:clickable="true"
+                        android:drawableLeft="@drawable/ic_copy_clipboard"
+                        android:drawablePadding="6dp"
+                        android:focusable="false"
+                        android:fontFamily="monospace"
+                        android:gravity="center_vertical|center_horizontal"
+                        android:includeFontPadding="false"
+                        android:paddingLeft="8dp"
+                        android:paddingRight="8dp"
+                        android:text="COPY LINK"
+                        android:textColor="#F0F4F8"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+
+                    <!-- Live RTT Ping Telemetry Box -->
+                    <TextView
+                        android:id="@+id/deck_ping_readout"
+                        android:layout_width="wrap_content"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/bg_badge_telemetry"
+                        android:fontFamily="monospace"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:paddingLeft="8dp"
+                        android:paddingRight="8dp"
+                        android:text="LIVE"
+                        android:textColor="#00F58A"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- TAB CONTENT 2: CHANNELS & DIRECT FREQUENCY HOP -->
+            <LinearLayout
+                android:id="@+id/deck_tab_content_channels"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <!-- Subheader: Switch Frequency -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="4dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:fontFamily="sans-serif-medium"
+                        android:includeFontPadding="false"
+                        android:letterSpacing="0.1"
+                        android:text="SWITCH FREQUENCY BY CODE"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/deck_active_room_tag"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="#SQ-884"
+                        android:textColor="#00F58A"
+                        android:textSize="9sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- Direct Code Input Row -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="34dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <EditText
+                        android:id="@+id/input_overlay_room_code"
+                        android:layout_width="0dp"
+                        android:layout_height="match_parent"
+                        android:layout_weight="1"
+                        android:background="@drawable/bg_input_field"
+                        android:fontFamily="monospace"
+                        android:hint="ENTER ROOM CODE"
+                        android:imeOptions="actionDone"
+                        android:inputType="textCapCharacters|textNoSuggestions"
+                        android:paddingLeft="8dp"
+                        android:paddingRight="8dp"
+                        android:singleLine="true"
+                        android:textColor="#F0F4F8"
+                        android:textColorHint="#464E62"
+                        android:textSize="11sp"
+                        android:textStyle="bold" />
+
+                    <!-- Randomize Button with Vector Dice Icon -->
+                    <ImageView
+                        android:id="@+id/btn_overlay_rand_code"
+                        android:layout_width="38dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginLeft="4dp"
+                        android:background="@drawable/bg_chip_channel"
+                        android:clickable="true"
+                        android:focusable="false"
+                        android:padding="8dp"
+                        android:scaleType="centerInside"
+                        android:src="@drawable/ic_dice_random" />
+
+                    <!-- Hop/Switch Button with Forward Arrow Icon -->
+                    <TextView
+                        android:id="@+id/btn_overlay_join_code"
+                        android:layout_width="56dp"
+                        android:layout_height="match_parent"
+                        android:layout_marginLeft="4dp"
+                        android:background="@drawable/bg_btn_deploy"
+                        android:clickable="true"
+                        android:drawableLeft="@drawable/ic_arrow_join"
+                        android:drawablePadding="2dp"
+                        android:focusable="false"
+                        android:fontFamily="monospace"
+                        android:gravity="center"
+                        android:includeFontPadding="false"
+                        android:paddingLeft="6dp"
+                        android:paddingRight="6dp"
+                        android:text="HOP"
+                        android:textColor="#0B0D13"
+                        android:textSize="10sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- Subheader: Recent Frequencies -->
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:layout_marginBottom="4dp"
+                    android:fontFamily="sans-serif-medium"
+                    android:includeFontPadding="false"
+                    android:letterSpacing="0.1"
+                    android:text="RECENT FREQUENCIES (TAP TO HOP)"
+                    android:textColor="#7C869B"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <!-- Dynamic Recent Channels Container -->
+                <LinearLayout
+                    android:id="@+id/deck_recent_channels_container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </LinearLayout>
+
+            <!-- TAB CONTENT 3: TOP-TIER CUSTOMIZATION CONTROL CENTER -->
+            <ScrollView
+                android:id="@+id/deck_tab_content_settings"
+                android:layout_width="match_parent"
+                android:layout_height="195dp"
+                android:layout_marginTop="6dp"
+                android:overScrollMode="never"
+                android:scrollbars="none"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingBottom="8dp">
+
+                    <!-- ============================================== -->
+                    <!-- 1. ACCENT THEMES & CHASSIS OPACITY             -->
+                    <!-- ============================================== -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:letterSpacing="0.08"
+                        android:text="// 01. ACCENT THEMES"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp"
+                        android:textStyle="bold" />
+
+                    <!-- Swatch Palette (6 Colors) -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="28dp"
+                        android:layout_marginTop="4dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <View
+                            android:id="@+id/btn_theme_mint"
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_marginRight="6dp"
+                            android:background="#00F58A"
+                            android:clickable="true"
+                            android:focusable="false" />
+
+                        <View
+                            android:id="@+id/btn_theme_cyan"
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_marginRight="6dp"
+                            android:background="#00D2FF"
+                            android:clickable="true"
+                            android:focusable="false" />
+
+                        <View
+                            android:id="@+id/btn_theme_amber"
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_marginRight="6dp"
+                            android:background="#FF9500"
+                            android:clickable="true"
+                            android:focusable="false" />
+
+                        <View
+                            android:id="@+id/btn_theme_red"
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_marginRight="6dp"
+                            android:background="#FF2A4B"
+                            android:clickable="true"
+                            android:focusable="false" />
+
+                        <View
+                            android:id="@+id/btn_theme_violet"
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_marginRight="6dp"
+                            android:background="#B366FF"
+                            android:clickable="true"
+                            android:focusable="false" />
+
+                        <View
+                            android:id="@+id/btn_theme_ghost"
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:background="#E0E0E0"
+                            android:clickable="true"
+                            android:focusable="false" />
+                    </LinearLayout>
+
+                    <!-- Opacity Slider -->
+                    <TextView
+                        android:id="@+id/txt_opacity_label"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="CHASSIS OPACITY: 100%"
+                        android:textColor="#F0F4F8"
+                        android:textSize="9sp" />
+
+                    <SeekBar
+                        android:id="@+id/seekbar_chassis_opacity"
+                        android:layout_width="match_parent"
+                        android:layout_height="18dp"
+                        android:max="100"
+                        android:progress="100"
+                        android:progressDrawable="@drawable/seekbar_gain_track"
+                        android:splitTrack="false"
+                        android:thumb="@drawable/seekbar_gain_thumb" />
+
+                    <!-- Deck Scale -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="PANEL SCALE"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="3dp"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <TextView
+                            android:id="@+id/btn_scale_compact"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="85%"
+                            android:textColor="#F0F4F8"
+                            android:textSize="9sp" />
+
+                        <TextView
+                            android:id="@+id/btn_scale_normal"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="100%"
+                            android:textColor="#00F58A"
+                            android:textSize="9sp" />
+
+                        <TextView
+                            android:id="@+id/btn_scale_expanded"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="115%"
+                            android:textColor="#F0F4F8"
+                            android:textSize="9sp" />
+                    </LinearLayout>
+
+                    <!-- Divider -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="#1C212D" />
+
+                    <!-- ============================================== -->
+                    <!-- 2. EDGE SLIDER HANDLE CUSTOMIZATIONS           -->
+                    <!-- ============================================== -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:letterSpacing="0.08"
+                        android:text="// 02. EDGE SLIDER PILL"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp"
+                        android:textStyle="bold" />
+
+                    <!-- Ghost Idle Fade Toggle -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="4dp"
+                        android:orientation="horizontal"
+                        android:weightSum="2">
+
+                        <TextView
+                            android:id="@+id/btn_fade_on"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="IDLE FADE: ON"
+                            android:textColor="#00F58A"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_fade_off"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="OFF (SOLID)"
+                            android:textColor="#7C869B"
+                            android:textSize="8sp" />
+                    </LinearLayout>
+
+                    <!-- Handle Thickness (Width) -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="HANDLE THICKNESS"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="3dp"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <TextView
+                            android:id="@+id/btn_handle_slim"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="14DP"
+                            android:textColor="#F0F4F8"
+                            android:textSize="9sp" />
+
+                        <TextView
+                            android:id="@+id/btn_handle_std"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="18DP"
+                            android:textColor="#00F58A"
+                            android:textSize="9sp" />
+
+                        <TextView
+                            android:id="@+id/btn_handle_wide"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="24DP"
+                            android:textColor="#F0F4F8"
+                            android:textSize="9sp" />
+                    </LinearLayout>
+
+                    <!-- Handle Height -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="HANDLE LENGTH"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="3dp"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <TextView
+                            android:id="@+id/btn_height_short"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="48DP"
+                            android:textColor="#F0F4F8"
+                            android:textSize="9sp" />
+
+                        <TextView
+                            android:id="@+id/btn_height_std"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="64DP"
+                            android:textColor="#00F58A"
+                            android:textSize="9sp" />
+
+                        <TextView
+                            android:id="@+id/btn_height_tall"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="88DP"
+                            android:textColor="#F0F4F8"
+                            android:textSize="9sp" />
+                    </LinearLayout>
+
+                    <!-- Docking Lock -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="DOCKING SNAP"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="3dp"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <TextView
+                            android:id="@+id/btn_dock_auto"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="AUTO-SNAP"
+                            android:textColor="#00F58A"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_dock_left"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="LOCK L"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_dock_right"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="LOCK R"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+                    </LinearLayout>
+
+                    <!-- Divider -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="#1C212D" />
+
+                    <!-- ============================================== -->
+                    <!-- 3. AUDIO & ACOUSTIC TUNING                     -->
+                    <!-- ============================================== -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:letterSpacing="0.08"
+                        android:text="// 03. AUDIO PROFILE"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp"
+                        android:textStyle="bold" />
+
+                    <!-- Bitrate Preset -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="VOICE BITRATE"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="3dp"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <TextView
+                            android:id="@+id/btn_bitrate_16k"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="16K ECO"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_bitrate_24k"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="24K TAC"
+                            android:textColor="#00F58A"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_bitrate_32k"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="32K HD"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+                    </LinearLayout>
+
+                    <!-- Chime Mode -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="AUDIO CHIMES"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="3dp"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <TextView
+                            android:id="@+id/btn_chime_beeps"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="BEEPS"
+                            android:textColor="#00F58A"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_chime_clicks"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="CLICKS"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_chime_mute"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="MUTE"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+                    </LinearLayout>
+
+                    <!-- Divider -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="#1C212D" />
+
+                    <!-- ============================================== -->
+                    <!-- 4. HAPTICS & FEEDBACK                          -->
+                    <!-- ============================================== -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:letterSpacing="0.08"
+                        android:text="// 04. HAPTICS &amp; ALERTS"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp"
+                        android:textStyle="bold" />
+
+                    <!-- Vibration Level -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="VIBRATION STRENGTH"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="3dp"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <TextView
+                            android:id="@+id/btn_haptic_off"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="OFF"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_haptic_subtle"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="SUBTLE"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_haptic_tactile"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="TACTILE"
+                            android:textColor="#00F58A"
+                            android:textSize="8sp" />
+                    </LinearLayout>
+
+                    <!-- Ping Alert Type -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="SQUAD PING ALERTS"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="3dp"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <TextView
+                            android:id="@+id/btn_ping_full"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="FULL"
+                            android:textColor="#00F58A"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_ping_flash"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="FLASH ONLY"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_ping_mute"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="MUTE"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+                    </LinearLayout>
+
+                    <!-- Divider -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="#1C212D" />
+
+                    <!-- ============================================== -->
+                    <!-- 5. GESTURES & AUTOMATIONS                      -->
+                    <!-- ============================================== -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:letterSpacing="0.08"
+                        android:text="// 05. AUTOMATIONS"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp"
+                        android:textStyle="bold" />
+
+                    <!-- Auto-Collapse Timer -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="AUTO-COLLAPSE"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="3dp"
+                        android:orientation="horizontal"
+                        android:weightSum="3">
+
+                        <TextView
+                            android:id="@+id/btn_collapse_off"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="MANUAL"
+                            android:textColor="#00F58A"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_collapse_5s"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="5 SEC"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_collapse_10s"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="10 SEC"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+                    </LinearLayout>
+
+                    <!-- Swipe Sensitivity -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="SWIPE TO CLOSE"
+                        android:textColor="#7C869B"
+                        android:textSize="9sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="3dp"
+                        android:orientation="horizontal"
+                        android:weightSum="2">
+
+                        <TextView
+                            android:id="@+id/btn_swipe_fast"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_marginRight="2dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="QUICK FLICK"
+                            android:textColor="#00F58A"
+                            android:textSize="8sp" />
+
+                        <TextView
+                            android:id="@+id/btn_swipe_deep"
+                            android:layout_width="0dp"
+                            android:layout_height="match_parent"
+                            android:layout_weight="1"
+                            android:background="@drawable/bg_chip_channel"
+                            android:fontFamily="monospace"
+                            android:gravity="center"
+                            android:text="DEEP DRAG"
+                            android:textColor="#F0F4F8"
+                            android:textSize="8sp" />
+                    </LinearLayout>
+
+                </LinearLayout>
+            </ScrollView>
+
         </LinearLayout>
     </LinearLayout>
 
