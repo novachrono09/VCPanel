@@ -34,6 +34,7 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/telemetry_badge_version"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:background="@drawable/bg_badge_telemetry"
@@ -42,7 +43,7 @@
             android:paddingTop="2dp"
             android:paddingRight="6dp"
             android:paddingBottom="2dp"
-            android:text="v2.4 RAW"
+            android:text="v2.3.0"
             android:textColor="#00F58A"
             android:textSize="10sp"
             android:textStyle="bold" />
@@ -78,6 +79,45 @@
         android:layout_marginTop="16dp"
         android:layout_marginBottom="20dp"
         android:background="#262C3A" />
+
+    <!-- DIRECT IN-APP UPDATE NOTIFICATION BANNER (VISIBLE WHEN UPDATE DETECTED) -->
+    <LinearLayout
+        android:id="@+id/layout_main_update_banner"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="12dp"
+        android:background="@drawable/bg_tactile_ping"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="10dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/txt_main_update_info"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:fontFamily="monospace"
+            android:text="[OTA] UPDATE AVAILABLE"
+            android:textColor="#00F58A"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btn_main_update_action"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_btn_deploy"
+            android:fontFamily="monospace"
+            android:paddingLeft="10dp"
+            android:paddingTop="4dp"
+            android:paddingRight="10dp"
+            android:paddingBottom="4dp"
+            android:text="UPDATE NOW"
+            android:textColor="#090A0D"
+            android:textSize="10sp"
+            android:textStyle="bold" />
+    </LinearLayout>
 
     <!-- ================================================================== -->
     <!-- CORE CONFIGURATION CONSOLE                                         -->

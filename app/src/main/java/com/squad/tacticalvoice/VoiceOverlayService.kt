@@ -180,6 +180,18 @@ class VoiceOverlayService : Service() {
 
     private lateinit var deckTabContentSettings: ScrollView
 
+    // Specific Person Mutual Mute Registry
+    private val locallyMutedParticipants = mutableSetOf<String>()
+    private val remotelyMutedMe = mutableSetOf<String>()
+
+    // Direct OTA In-App Update Engine
+    private lateinit var tabBadgeUpdateDot: View
+    private lateinit var txtOverlayCurrentVersion: TextView
+    private lateinit var txtUpdateStatus: TextView
+    private lateinit var btnActionUpdate: TextView
+    private var latestUpdateInfo: AppUpdateManager.UpdateInfo? = null
+    private var isDownloadingUpdate = false
+
     private val speakerLastActiveTime = mutableMapOf<String, Long>()
     private var hangoverCheckRunnable: Runnable? = null
     private var ghostFadeRunnable: Runnable? = null
@@ -243,6 +255,10 @@ class VoiceOverlayService : Service() {
         autoCollapseSeconds = prefs.getInt("auto_collapse_sec", 0)
         swipeSensitivityDp = prefs.getInt("swipe_sensitivity", 20)
         isVoiceBlinkEnabled = prefs.getBoolean("pref_voice_blink", true)
+
+        val savedMutes = prefs.getStringSet("locally_muted_users", null) ?: emptySet()
+        locallyMutedParticipants.clear()
+        locallyMutedParticipants.addAll(savedMutes)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -311,6 +327,7 @@ class VoiceOverlayService : Service() {
                         deckPingReadout.setTextColor(currentAccentColor)
                         currentRoom.localParticipant.setMicrophoneEnabled(isMicEnabled)
                         rebuildSquadList()
+                        broadcastMuteSync()
                     }
                     is RoomEvent.Reconnecting -> {
                         deckPingReadout.text = "RECON"
@@ -320,18 +337,21 @@ class VoiceOverlayService : Service() {
                         deckPingReadout.text = "LIVE"
                         deckPingReadout.setTextColor(currentAccentColor)
                         currentRoom.localParticipant.setMicrophoneEnabled(isMicEnabled)
+                        broadcastMuteSync()
                     }
                     is RoomEvent.ParticipantConnected -> {
                         val name = event.participant.identity?.value ?: "OPERATOR"
                         Toast.makeText(this@VoiceOverlayService, "[+] $name JOINED SQUAD", Toast.LENGTH_SHORT).show()
                         playChime(ToneGenerator.TONE_PROP_BEEP2, 110)
                         rebuildSquadList()
+                        broadcastMuteSync()
                     }
                     is RoomEvent.ParticipantDisconnected -> {
                         val name = event.participant.identity?.value ?: "OPERATOR"
                         Toast.makeText(this@VoiceOverlayService, "[-] $name LEFT SQUAD", Toast.LENGTH_SHORT).show()
                         playChime(ToneGenerator.TONE_PROP_PROMPT, 130)
                         speakerLastActiveTime.remove(name)
+                        remotelyMutedMe.remove(name)
                         rebuildSquadList()
                     }
                     is RoomEvent.DataReceived -> {
@@ -435,6 +455,11 @@ class VoiceOverlayService : Service() {
         deckRecentChannelsContainer = root.findViewById(R.id.deck_recent_channels_container)
 
         deckTabContentSettings = root.findViewById(R.id.deck_tab_content_settings)
+
+        tabBadgeUpdateDot = root.findViewById(R.id.tab_badge_update_dot)
+        txtOverlayCurrentVersion = root.findViewById(R.id.txt_overlay_current_version)
+        txtUpdateStatus = root.findViewById(R.id.txt_update_status)
+        btnActionUpdate = root.findViewById(R.id.btn_action_update)
 
         // 1. Edge Slider Handle Drag & Slide
         attachEdgeSliderTouch(layoutCollapsed, params)
@@ -794,6 +819,107 @@ class VoiceOverlayService : Service() {
             getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
                 .edit().putInt("swipe_sensitivity", dist).apply()
         }
+
+        // Pillar 6: Direct In-App OTA Update Engine
+        txtOverlayCurrentVersion.text = "v${BuildConfig.VERSION_NAME}"
+        txtUpdateStatus.text = "STATUS: READY"
+        btnActionUpdate.text = "CHECK FOR UPDATES"
+        btnActionUpdate.setTextColor(currentAccentColor)
+        btnActionUpdate.background = createSegmentChipDrawable(false, currentAccentColor)
+
+        attachSpringTouch(btnActionUpdate) {
+            vibrateClick()
+            if (isDownloadingUpdate) return@attachSpringTouch
+            val info = latestUpdateInfo
+            if (info != null) {
+                startOtaDownloadAndInstall(info)
+            } else {
+                checkOtaUpdates(silent = false)
+            }
+        }
+
+        // Silent background check on boot
+        checkOtaUpdates(silent = true)
+    }
+
+    private fun checkOtaUpdates(silent: Boolean) {
+        if (!silent) {
+            txtUpdateStatus.text = "CONNECTING TO GITHUB OTA..."
+            btnActionUpdate.text = "CHECKING..."
+        }
+        serviceScope.launch(Dispatchers.Main) {
+            when (val result = AppUpdateManager.checkForUpdate(BuildConfig.VERSION_NAME)) {
+                is AppUpdateManager.UpdateResult.Available -> {
+                    latestUpdateInfo = result.updateInfo
+                    txtUpdateStatus.text = "UPDATE AVAILABLE: v${result.updateInfo.versionName}"
+                    txtUpdateStatus.setTextColor(COLOR_WHITE)
+                    btnActionUpdate.text = "DOWNLOAD & INSTALL"
+                    btnActionUpdate.setTextColor(COLOR_WHITE)
+                    btnActionUpdate.background = createSegmentChipDrawable(true, THEME_MINT)
+                    tabBadgeUpdateDot.visibility = View.VISIBLE
+                    if (!silent) {
+                        playChime(ToneGenerator.TONE_PROP_PROMPT, 80)
+                        vibrateAlert()
+                        Toast.makeText(this@VoiceOverlayService, "[UPDATE] VOX v${result.updateInfo.versionName} AVAILABLE!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                is AppUpdateManager.UpdateResult.UpToDate -> {
+                    latestUpdateInfo = null
+                    txtUpdateStatus.text = "VOX IS UP TO DATE (v${BuildConfig.VERSION_NAME})"
+                    txtUpdateStatus.setTextColor(COLOR_MUTED)
+                    btnActionUpdate.text = "CHECK FOR UPDATES"
+                    btnActionUpdate.setTextColor(currentAccentColor)
+                    btnActionUpdate.background = createSegmentChipDrawable(false, currentAccentColor)
+                    tabBadgeUpdateDot.visibility = View.GONE
+                    if (!silent) {
+                        playChime(ToneGenerator.TONE_PROP_ACK, 40)
+                        Toast.makeText(this@VoiceOverlayService, "VOX is up to date!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                is AppUpdateManager.UpdateResult.Error -> {
+                    if (!silent) {
+                        txtUpdateStatus.text = "OTA: ${result.message.take(24)}"
+                        txtUpdateStatus.setTextColor(THEME_RED)
+                        btnActionUpdate.text = "RETRY CHECK"
+                        Toast.makeText(this@VoiceOverlayService, "Update check: ${result.message}", Toast.LENGTH_SHORT).show()
+                    } else {
+                        txtUpdateStatus.text = "VOX v${BuildConfig.VERSION_NAME} READY"
+                    }
+                }
+            }
+        }
+    }
+
+    private fun startOtaDownloadAndInstall(info: AppUpdateManager.UpdateInfo) {
+        if (isDownloadingUpdate) return
+        isDownloadingUpdate = true
+        txtUpdateStatus.text = "DOWNLOADING OTA ARCHIVE..."
+        txtUpdateStatus.setTextColor(THEME_AMBER)
+        btnActionUpdate.text = "STARTING..."
+
+        serviceScope.launch(Dispatchers.Main) {
+            try {
+                val apkFile = AppUpdateManager.downloadApk(this@VoiceOverlayService, info.apkDownloadUrl) { pct, _, _ ->
+                    if (pct >= 0) {
+                        btnActionUpdate.text = "DOWNLOADING: $pct%"
+                    } else {
+                        btnActionUpdate.text = "DOWNLOADING..."
+                    }
+                }
+                isDownloadingUpdate = false
+                txtUpdateStatus.text = "DOWNLOAD COMPLETE. READY TO FLASH."
+                txtUpdateStatus.setTextColor(THEME_MINT)
+                btnActionUpdate.text = "LAUNCH INSTALLER"
+                btnActionUpdate.background = createSegmentChipDrawable(true, THEME_MINT)
+                AppUpdateManager.installApk(this@VoiceOverlayService, apkFile)
+            } catch (e: Exception) {
+                isDownloadingUpdate = false
+                txtUpdateStatus.text = "DOWNLOAD FAILED"
+                txtUpdateStatus.setTextColor(THEME_RED)
+                btnActionUpdate.text = "RETRY DOWNLOAD"
+                Toast.makeText(this@VoiceOverlayService, "OTA download error: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     private fun applyCustomHexFromInput(
@@ -1098,6 +1224,11 @@ class VoiceOverlayService : Service() {
         layoutExpanded.findViewById<View>(R.id.custom_color_preview)?.background = createSwatchDrawable(accentColor)
         layoutExpanded.findViewById<EditText>(R.id.edit_custom_hex)?.setText(String.format("#%06X", (0xFFFFFF and accentColor)))
 
+        if (latestUpdateInfo == null && !isDownloadingUpdate) {
+            btnActionUpdate.setTextColor(accentColor)
+            btnActionUpdate.background = createSegmentChipDrawable(false, accentColor)
+        }
+
         // 6. Roster Tab Elements
         for (i in 0 until deckRosterContainer.childCount) {
             val child = deckRosterContainer.getChildAt(i)
@@ -1108,18 +1239,24 @@ class VoiceOverlayService : Service() {
                 child.background = createRosterRowDrawable(isSpeaker, accentColor)
                 child.findViewWithTag<View>("LED_$id")?.background = createLedDrawable(if (isSpeaker) accentColor else COLOR_MUTED)
 
-                val sb = (child as? ViewGroup)?.let { vg ->
-                    (0 until vg.childCount).mapNotNull { vg.getChildAt(it) as? SeekBar }.firstOrNull()
-                }
-                sb?.progressTintList = ColorStateList.valueOf(accentColor)
-                sb?.thumbTintList = ColorStateList.valueOf(accentColor)
+                val isMuted = locallyMutedParticipants.contains(id) || remotelyMutedMe.contains(id)
+                val sb = child.findViewWithTag<SeekBar>("SEEKBAR_$id")
+                val tint = if (isMuted) THEME_RED else accentColor
+                sb?.progressTintList = ColorStateList.valueOf(tint)
+                sb?.thumbTintList = ColorStateList.valueOf(tint)
 
                 val pingBtn = child.findViewWithTag<TextView>("PING_$id")
                 pingBtn?.setTextColor(accentColor)
 
+                val muteBtn = child.findViewWithTag<TextView>("MUTE_BTN_$id")
+                if (!isMuted) {
+                    muteBtn?.setTextColor(COLOR_MUTED)
+                    muteBtn?.background = createSegmentChipDrawable(false, accentColor)
+                }
+
                 val gainReadout = child.findViewWithTag<TextView>("GAIN_$id")
                 val vol = participantVolumes[id] ?: 100
-                if (vol == 100 && gainReadout != null) {
+                if (!isMuted && vol == 100 && gainReadout != null) {
                     gainReadout.setTextColor(accentColor)
                 }
             }
@@ -1722,6 +1859,56 @@ class VoiceOverlayService : Service() {
         }
     }
 
+    private fun toggleParticipantMute(identity: String, participant: RemoteParticipant?) {
+        val currentlyLocallyMuted = locallyMutedParticipants.contains(identity)
+        if (currentlyLocallyMuted) {
+            locallyMutedParticipants.remove(identity)
+            broadcastMuteState(identity, false)
+            vibrateClick()
+            playChime(ToneGenerator.TONE_PROP_ACK, 40)
+            Toast.makeText(this, "[+] UNMUTED $identity", Toast.LENGTH_SHORT).show()
+        } else {
+            locallyMutedParticipants.add(identity)
+            broadcastMuteState(identity, true)
+            vibrateAlert()
+            playChime(ToneGenerator.TONE_PROP_PROMPT, 60)
+            Toast.makeText(this, "[!] MUTED $identity (MUTUAL MUTE ACTIVE)", Toast.LENGTH_SHORT).show()
+        }
+
+        getSharedPreferences("tactical_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .putStringSet("locally_muted_users", locallyMutedParticipants.toSet())
+            .apply()
+
+        participant?.let {
+            val vol = participantVolumes[identity] ?: 100
+            setParticipantVolume(it, vol)
+        }
+        rebuildSquadList()
+    }
+
+    private fun broadcastMuteState(targetIdentity: String, isMuted: Boolean) {
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                val flag = if (isMuted) "1" else "0"
+                room?.localParticipant?.publishData(
+                    data = "MUTE:$targetIdentity:$flag".toByteArray(Charsets.UTF_8)
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun broadcastMuteSync() {
+        serviceScope.launch(Dispatchers.IO) {
+            try {
+                val list = locallyMutedParticipants.joinToString(",")
+                room?.localParticipant?.publishData(
+                    data = "MUTE_SYNC:$list".toByteArray(Charsets.UTF_8)
+                )
+            } catch (_: Exception) {}
+        }
+    }
+
     private fun handleDataReceived(event: RoomEvent.DataReceived) {
         val payload = try {
             String(event.data, Charsets.UTF_8)
@@ -1732,6 +1919,39 @@ class VoiceOverlayService : Service() {
             val target = payload.removePrefix("PING:")
             if (target.equals(currentCallsign, ignoreCase = true) || target == "ALL") {
                 triggerSquadAlert(sender)
+            }
+        } else if (payload.startsWith("MUTE:")) {
+            val parts = payload.removePrefix("MUTE:").split(":")
+            if (parts.size >= 2) {
+                val target = parts[0]
+                val isMuted = parts[1] == "1"
+                if (target.equals(currentCallsign, ignoreCase = true)) {
+                    mainHandler.post {
+                        if (isMuted) {
+                            remotelyMutedMe.add(sender)
+                            vibrateAlert()
+                            playChime(ToneGenerator.TONE_CDMA_ALERT_NETWORK_LITE, 120)
+                            Toast.makeText(this@VoiceOverlayService, "[!] $sender MUTED YOU (MUTUAL MUTE ACTIVE)", Toast.LENGTH_SHORT).show()
+                        } else {
+                            remotelyMutedMe.remove(sender)
+                            playChime(ToneGenerator.TONE_PROP_ACK, 40)
+                            Toast.makeText(this@VoiceOverlayService, "[+] $sender UNMUTED YOU", Toast.LENGTH_SHORT).show()
+                        }
+                        applyRemoteVolumes()
+                        rebuildSquadList()
+                    }
+                }
+            }
+        } else if (payload.startsWith("MUTE_SYNC:")) {
+            val raw = payload.removePrefix("MUTE_SYNC:").trim()
+            val targetList = if (raw.isEmpty()) emptyList() else raw.split(",").map { it.trim() }
+            val mutedMe = targetList.any { it.equals(currentCallsign, ignoreCase = true) }
+            mainHandler.post {
+                val stateChanged = if (mutedMe) remotelyMutedMe.add(sender) else remotelyMutedMe.remove(sender)
+                if (stateChanged) {
+                    applyRemoteVolumes()
+                    rebuildSquadList()
+                }
             }
         }
     }
@@ -1877,6 +2097,10 @@ class VoiceOverlayService : Service() {
                 prefs.getInt("vol_$identity", 100)
             }
 
+            val isLocallyMuted = locallyMutedParticipants.contains(identity)
+            val isMutedByThem = remotelyMutedMe.contains(identity)
+            val isMutuallyMuted = isLocallyMuted || isMutedByThem
+
             val row = LinearLayout(this).apply {
                 layoutParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT,
@@ -1911,6 +2135,39 @@ class VoiceOverlayService : Service() {
                 }
             }
 
+            val muteBadge = TextView(this).apply {
+                tag = "MUTE_BADGE_$identity"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 8f)
+                typeface = Typeface.MONOSPACE
+                paint.isFakeBoldText = true
+                gravity = Gravity.CENTER
+                setPadding(dp(4), dp(1), dp(4), dp(1))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    leftMargin = dp(4)
+                    rightMargin = dp(6)
+                }
+                when {
+                    isMutedByThem -> {
+                        text = "MUTED YOU"
+                        setTextColor(COLOR_WHITE)
+                        background = createSegmentChipDrawable(true, THEME_RED)
+                        visibility = View.VISIBLE
+                    }
+                    isLocallyMuted -> {
+                        text = "MUTUAL MUTE"
+                        setTextColor(COLOR_WHITE)
+                        background = createSegmentChipDrawable(true, THEME_RED)
+                        visibility = View.VISIBLE
+                    }
+                    else -> {
+                        visibility = View.GONE
+                    }
+                }
+            }
+
             val pingBtn = TextView(this).apply {
                 tag = "PING_$identity"
                 text = "PING"
@@ -1933,7 +2190,12 @@ class VoiceOverlayService : Service() {
 
             val gainReadout = TextView(this).apply {
                 tag = "GAIN_$identity"
-                updateGainText(this, savedVol)
+                if (isMutuallyMuted) {
+                    text = "MUTED"
+                    setTextColor(THEME_RED)
+                } else {
+                    updateGainText(this, savedVol)
+                }
                 setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
                 typeface = Typeface.MONOSPACE
                 paint.isFakeBoldText = true
@@ -1941,27 +2203,68 @@ class VoiceOverlayService : Service() {
 
             topBar.addView(led)
             topBar.addView(callsignTxt)
+            topBar.addView(muteBadge)
             topBar.addView(pingBtn)
             topBar.addView(gainReadout)
 
             var lastSnapped = false
 
+            val sliderRow = LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                orientation = LinearLayout.HORIZONTAL
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(22)
+                ).apply { topMargin = dp(2) }
+            }
+
+            val muteBtn = TextView(this).apply {
+                tag = "MUTE_BTN_$identity"
+                text = if (isMutuallyMuted) "MUTED" else "MUTE"
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 8f)
+                typeface = Typeface.MONOSPACE
+                paint.isFakeBoldText = true
+                gravity = Gravity.CENTER
+                if (isMutuallyMuted) {
+                    setTextColor(COLOR_WHITE)
+                    background = createSegmentChipDrawable(true, THEME_RED)
+                } else {
+                    setTextColor(COLOR_MUTED)
+                    background = createSegmentChipDrawable(false, currentAccentColor)
+                }
+                setPadding(dp(6), dp(2), dp(6), dp(2))
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    dp(18)
+                ).apply { rightMargin = dp(6) }
+
+                attachSpringTouch(this) {
+                    toggleParticipantMute(identity, participant)
+                }
+            }
+
             val seekbar = SeekBar(this).apply {
+                tag = "SEEKBAR_$identity"
                 max = 200
                 progress = savedVol
                 progressDrawable = getDrawable(R.drawable.seekbar_gain_track)
                 thumb = getDrawable(R.drawable.seekbar_gain_thumb)
-                progressTintList = ColorStateList.valueOf(currentAccentColor)
-                thumbTintList = ColorStateList.valueOf(currentAccentColor)
+                val tint = if (isMutuallyMuted) THEME_RED else currentAccentColor
+                progressTintList = ColorStateList.valueOf(tint)
+                thumbTintList = ColorStateList.valueOf(tint)
                 splitTrack = false
+                isEnabled = !isMutuallyMuted
+                alpha = if (isMutuallyMuted) 0.35f else 1.0f
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    dp(18)
-                ).apply { topMargin = dp(2) }
-                setPadding(dp(6), 0, dp(6), 0)
+                    0,
+                    dp(18),
+                    1f
+                )
+                setPadding(dp(4), 0, dp(4), 0)
 
                 setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                     override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                        if (isMutuallyMuted) return
                         var effectiveProgress = progress
                         if (fromUser && progress in 96..104) {
                             effectiveProgress = 100
@@ -1981,17 +2284,20 @@ class VoiceOverlayService : Service() {
                     }
 
                     override fun onStartTrackingTouch(sb: SeekBar?) {
-                        sb?.animate()?.scaleY(1.25f)?.setDuration(100)?.start()
+                        if (!isMutuallyMuted) sb?.animate()?.scaleY(1.25f)?.setDuration(100)?.start()
                     }
 
                     override fun onStopTrackingTouch(sb: SeekBar?) {
-                        sb?.animate()?.scaleY(1.0f)?.setDuration(120)?.start()
+                        if (!isMutuallyMuted) sb?.animate()?.scaleY(1.0f)?.setDuration(120)?.start()
                     }
                 })
             }
 
+            sliderRow.addView(muteBtn)
+            sliderRow.addView(seekbar)
+
             row.addView(topBar)
-            row.addView(seekbar)
+            row.addView(sliderRow)
             deckRosterContainer.addView(row)
 
             setParticipantVolume(participant, savedVol)
@@ -2021,7 +2327,9 @@ class VoiceOverlayService : Service() {
     }
 
     private fun setParticipantVolume(participant: RemoteParticipant, percentage: Int) {
-        val effectiveGain = if (isDeafened) 0.0 else (percentage / 100.0)
+        val identity = participant.identity?.value ?: return
+        val isMuted = locallyMutedParticipants.contains(identity) || remotelyMutedMe.contains(identity)
+        val effectiveGain = if (isDeafened || isMuted) 0.0 else (percentage / 100.0)
         participant.audioTrackPublications.forEach { (_, track) ->
             (track as? RemoteAudioTrack)?.setVolume(effectiveGain)
         }
@@ -2039,7 +2347,8 @@ class VoiceOverlayService : Service() {
         }
 
         val activeIds = speakerLastActiveTime.filter { (now - it.value) < 400L }.keys.toSet()
-        val isAnyoneTalking = activeIds.isNotEmpty()
+        val audibleActiveIds = activeIds.filterNot { locallyMutedParticipants.contains(it) || remotelyMutedMe.contains(it) }.toSet()
+        val isAnyoneTalking = audibleActiveIds.isNotEmpty()
 
         // Edge slider tab live speaking state
         val shouldBlink = isVoiceBlinkEnabled && isAnyoneTalking
@@ -2054,7 +2363,7 @@ class VoiceOverlayService : Service() {
             val rowTag = child.tag as? String ?: continue
             if (rowTag.startsWith("ROW_")) {
                 val id = rowTag.removePrefix("ROW_")
-                val isSpeaker = activeIds.contains(id)
+                val isSpeaker = audibleActiveIds.contains(id)
                 child.isActivated = isSpeaker
                 child.background = createRosterRowDrawable(isSpeaker, currentAccentColor)
                 val led = child.findViewWithTag<View>("LED_$id")

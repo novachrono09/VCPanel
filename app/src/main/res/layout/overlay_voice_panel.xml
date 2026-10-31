@@ -73,17 +73,32 @@
                 android:scaleType="centerInside"
                 android:src="@drawable/ic_radio_channels" />
 
-            <!-- Tab 3: Settings & Customization Icon -->
-            <ImageView
-                android:id="@+id/tab_btn_settings"
+            <!-- Tab 3: Settings & Customization Icon with Update Dot -->
+            <FrameLayout
                 android:layout_width="30dp"
-                android:layout_height="30dp"
-                android:background="@drawable/bg_tab_button"
-                android:clickable="true"
-                android:focusable="false"
-                android:padding="6dp"
-                android:scaleType="centerInside"
-                android:src="@drawable/ic_tab_settings" />
+                android:layout_height="30dp">
+
+                <ImageView
+                    android:id="@+id/tab_btn_settings"
+                    android:layout_width="30dp"
+                    android:layout_height="30dp"
+                    android:background="@drawable/bg_tab_button"
+                    android:clickable="true"
+                    android:focusable="false"
+                    android:padding="6dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_tab_settings" />
+
+                <View
+                    android:id="@+id/tab_badge_update_dot"
+                    android:layout_width="7dp"
+                    android:layout_height="7dp"
+                    android:layout_gravity="top|end"
+                    android:layout_marginTop="2dp"
+                    android:layout_marginEnd="2dp"
+                    android:background="@drawable/indicator_voice_led"
+                    android:visibility="gone" />
+            </FrameLayout>
         </LinearLayout>
 
         <!-- MAIN DECK CONTENT WRAPPER -->
@@ -1439,6 +1454,69 @@
                             android:textColor="#F0F4F8"
                             android:textSize="8sp" />
                     </LinearLayout>
+
+                    <!-- ============================================== -->
+                    <!-- PILLAR 6: DIRECT IN-APP OTA ENGINE             -->
+                    <!-- ============================================== -->
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:layout_marginTop="10dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="#222733" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:fontFamily="monospace"
+                            android:includeFontPadding="false"
+                            android:letterSpacing="0.08"
+                            android:text="6 // DIRECT APP UPDATES"
+                            android:textColor="#00F58A"
+                            android:textSize="9sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/txt_overlay_current_version"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:fontFamily="monospace"
+                            android:text="v2.3.0"
+                            android:textColor="#7C869B"
+                            android:textSize="9sp" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/txt_update_status"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:fontFamily="monospace"
+                        android:includeFontPadding="false"
+                        android:text="STATUS: READY FOR TELEMETRY"
+                        android:textColor="#F0F4F8"
+                        android:textSize="8sp" />
+
+                    <TextView
+                        android:id="@+id/btn_action_update"
+                        android:layout_width="match_parent"
+                        android:layout_height="24dp"
+                        android:layout_marginTop="6dp"
+                        android:layout_marginBottom="8dp"
+                        android:background="@drawable/bg_chip_channel"
+                        android:fontFamily="monospace"
+                        android:gravity="center"
+                        android:text="CHECK FOR UPDATES"
+                        android:textColor="#00F58A"
+                        android:textSize="8sp"
+                        android:textStyle="bold" />
 
                 </LinearLayout>
             </ScrollView>

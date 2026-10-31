@@ -20,9 +20,11 @@ import android.view.animation.OvershootInterpolator
 import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
+import kotlinx.coroutines.*
 
 class MainActivity : Activity() {
 
+    private val activityScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private lateinit var inputCallsign: EditText
     private lateinit var inputChannelCode: EditText
     private lateinit var btnRandomizeCode: TextView
@@ -115,6 +117,75 @@ class MainActivity : Activity() {
 
         // Lightweight entrance cascade (0 object allocations)
         runStaggeredEntranceAnimation()
+
+        // Check for OTA Direct Update
+        setupUpdateCheck()
+    }
+
+    private fun setupUpdateCheck() {
+        val versionBadge = findViewById<TextView>(R.id.telemetry_badge_version)
+        versionBadge?.text = "v${BuildConfig.VERSION_NAME}"
+        attachTactileSpring(versionBadge) {
+            vibrateClick()
+            Toast.makeText(this, "Checking for latest VOX releases...", Toast.LENGTH_SHORT).show()
+            activityScope.launch {
+                when (val res = AppUpdateManager.checkForUpdate(BuildConfig.VERSION_NAME)) {
+                    is AppUpdateManager.UpdateResult.Available -> {
+                        Toast.makeText(this@MainActivity, "Update v${res.updateInfo.versionName} available!", Toast.LENGTH_SHORT).show()
+                        displayUpdateBanner(res.updateInfo)
+                    }
+                    is AppUpdateManager.UpdateResult.UpToDate -> {
+                        Toast.makeText(this@MainActivity, "VOX is up to date (v${BuildConfig.VERSION_NAME})", Toast.LENGTH_SHORT).show()
+                    }
+                    is AppUpdateManager.UpdateResult.Error -> {
+                        Toast.makeText(this@MainActivity, res.message, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        activityScope.launch {
+            val res = AppUpdateManager.checkForUpdate(BuildConfig.VERSION_NAME)
+            if (res is AppUpdateManager.UpdateResult.Available) {
+                displayUpdateBanner(res.updateInfo)
+            }
+        }
+    }
+
+    private fun displayUpdateBanner(info: AppUpdateManager.UpdateInfo) {
+        val banner = findViewById<View>(R.id.layout_main_update_banner) ?: return
+        val infoTxt = findViewById<TextView>(R.id.txt_main_update_info)
+        val actionBtn = findViewById<TextView>(R.id.btn_main_update_action)
+
+        infoTxt?.text = "UPDATE v${info.versionName} READY"
+        banner.visibility = View.VISIBLE
+
+        actionBtn?.let { btn ->
+            attachTactileSpring(btn) {
+                vibrateClick()
+                btn.text = "DOWNLOADING..."
+                btn.isEnabled = false
+                activityScope.launch {
+                    try {
+                        val file = AppUpdateManager.downloadApk(this@MainActivity, info.apkDownloadUrl) { pct, _, _ ->
+                            if (pct >= 0) btn.text = "$pct%"
+                        }
+                        btn.text = "INSTALL"
+                        btn.isEnabled = true
+                        AppUpdateManager.installApk(this@MainActivity, file)
+                    } catch (e: Exception) {
+                        btn.text = "RETRY"
+                        btn.isEnabled = true
+                        Toast.makeText(this@MainActivity, "Update error: ${e.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        activityScope.cancel()
     }
 
     private fun runStaggeredEntranceAnimation() {

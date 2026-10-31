@@ -11,8 +11,8 @@ android {
         applicationId = "com.squad.tacticalvoice"
         minSdk = 26
         targetSdk = 34
-        versionCode = 13
-        versionName = "2.2.0"
+        versionCode = 14
+        versionName = "2.3.0"
 
         // Bundle ARM64 and ARMv7 (32-bit) native C++ libraries for universal compatibility
         // Prevents UnsatisfiedLinkError crashes on budget/low-RAM 32-bit Android phones
@@ -20,6 +20,10 @@ android {
             abiFilters.add("arm64-v8a")
             abiFilters.add("armeabi-v7a")
         }
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     signingConfigs {
@@ -53,7 +57,8 @@ android {
 }
 
 dependencies {
-    // LiveKit native WebRTC wrapper + Coroutines (that's literally all we need)
+    // LiveKit native WebRTC wrapper + Coroutines + AndroidX Core (FileProvider & OTA install)
+    implementation("androidx.core:core-ktx:1.13.1")
     implementation("io.livekit:livekit-android:2.12.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
 }
